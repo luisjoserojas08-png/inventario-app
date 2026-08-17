@@ -9,8 +9,11 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Ruta de bienvenida
-app.get('/', (req, res) => {
+// 1. PRIMERO: Servir archivos estáticos (para que cargue tu index.html al entrar a la raíz)
+app.use(express.static('public'));
+
+// 2. SEGUNDO: Cambiamos la ruta raíz o la movemos a '/api/status' para no chocar con el HTML
+app.get('/api/status', (req, res) => {
   res.json({ mensaje: '¡El servidor del sistema de inventario está en línea!' });
 });
 
@@ -25,9 +28,7 @@ app.get('/api/usuarios', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Servidor corriendo en el puerto ${PORT}`);
-});// Ruta para registrar un nuevo producto
+// Ruta para registrar un nuevo producto
 app.post('/api/productos', async (req, res) => {
   try {
     const { sku, nombre, categoria_id, stock_actual, stock_minimo, precio_costo } = req.body;
@@ -54,5 +55,8 @@ app.get('/api/productos', async (req, res) => {
     console.error(error);
     res.status(500).json({ error: 'Error al obtener los productos' });
   }
-});// Servir archivos estáticos de la carpeta public
-app.use(express.static('public'));
+});
+
+app.listen(PORT, () => {
+  console.log(`Servidor corriendo en el puerto ${PORT}`);
+});

@@ -1,16 +1,15 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
+// Imprimimos para verificar en los logs de Render si la URL está llegando
+console.log("DATABASE_URL configurada:", process.env.DATABASE_URL ? "SÍ ESTÁ PRESENTE" : "ESTÁ VACÍA O FALTANTE");
+
 const pool = new Pool({
-  host: process.env.DB_HOST || 'db.bwgkgpvkdmgosocudgbi.supabase.co',
-  database: process.env.DB_NAME || 'postgres',
-  user: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || 'Skubal$$..%%',
-  port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 6543,
+  connectionString: process.env.DATABASE_URL,
   ssl: {
     rejectUnauthorized: false
   },
-  family: 4 // Fuerza IPv4 estrictamente
+  family: 4 // Fuerza IPv4
 });
 
 module.exports = pool;

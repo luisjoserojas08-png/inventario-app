@@ -2,46 +2,145 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Inicio - ERP Inventario</title>
-    <link rel="stylesheet" href="style.css">
-</head>
-<body>
-    <!-- BARRA DE NAVEGACIÓN -->
-    <div class="navbar">
-        <a href="index.html">🏠 Inicio</a>
-        <a href="maestros.html">📦 Datos Maestros</a>
-        <a href="movimientos.html">🔄 Movimientos</a>
-        <a href="inventario.html">📊 Inventario</a>
-        <a href="#" onclick="cerrarSesion()" style="background-color: #dc3545; float: right; margin-right: 20px;">🚪 Cerrar Sesión</a>
-    </div>
-
-    <div class="container">
-        <div class="panel" style="text-align: center; padding: 50px 20px;">
-            <h1>Bienvenido al ERP de Gestión de Inventario</h1>
-            <h2 id="mensaje_bienvenida" style="color: #0056b3; font-weight: normal; margin-bottom: 20px;"></h2>
-            <p>Utiliza el menú superior para navegar entre los módulos del sistema.</p>
-        </div>
-    </div>
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERP - Control de Inventario</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <script>
-        // 1. SEGURIDAD: Verificar si el usuario tiene un Token
-        const token = localStorage.getItem('erp_token');
-        if (!token) {
-            window.location.href = 'login.html'; // Lo expulsa si no está logueado
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              corporate: {
+                dark: '#0f172a',
+                primary: '#1e40af',
+                light: '#f8fafc',
+                border: '#e2e8f0'
+              }
+            }
+          }
         }
-
-        // 2. PERSONALIZACIÓN: Mostrar el nombre del usuario
-        const usuario = localStorage.getItem('erp_usuario');
-        if (usuario) {
-            document.getElementById('mensaje_bienvenida').innerText = 'Hola, ' + usuario;
-        }
-
-        // 3. FUNCIÓN DE SALIDA
-        function cerrarSesion() {
-            localStorage.removeItem('erp_token');
-            localStorage.removeItem('erp_usuario');
-            window.location.href = 'login.html';
-        }
+      }
     </script>
+</head>
+<body class="bg-corporate-light font-sans text-slate-800 antialiased">
+
+  <div class="flex h-screen overflow-hidden">
+    
+    <!-- Barra Lateral (Sidebar) -->
+    <aside class="w-64 bg-corporate-dark text-slate-300 flex flex-col hidden md:flex">
+      <div class="p-6 text-xl font-bold text-white tracking-wider border-b border-slate-800 flex items-center space-x-2">
+        <span>ERP Inventario</span>
+      </div>
+      <nav class="flex-1 p-4 space-y-2">
+        <a href="#" class="block px-4 py-2.5 rounded-lg bg-corporate-primary text-white font-medium transition shadow-xs">Dashboard</a>
+        <a href="/api/reporte-salidas" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition">Descargar Reporte Excel</a>
+      </nav>
+      <div class="p-4 border-t border-slate-800 text-xs text-slate-500">
+        Sistema Activo • Conectado a Neon
+      </div>
+    </aside>
+
+    <!-- Contenido Principal -->
+    <div class="flex-1 flex flex-col overflow-y-auto">
+      
+      <!-- Cabecera -->
+      <header class="bg-white border-b border-corporate-border h-16 flex items-center justify-between px-8 shadow-xs">
+        <h1 class="text-lg font-semibold text-slate-700">Panel General de Existencias</h1>
+        <div class="flex items-center space-x-4">
+          <button onclick="cerrarSesion()" class="text-sm text-red-600 hover:text-red-800 font-medium bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition">Cerrar Sesión</button>
+        </div>
+      </header>
+
+      <!-- Cuerpo -->
+      <main class="p-8">
+        
+        <!-- Tarjetas de Resumen -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div class="bg-white p-6 rounded-xl border border-corporate-border shadow-xs">
+            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Estado del Sistema</p>
+            <h3 class="text-xl font-bold text-emerald-600 mt-2">Operativo (Online)</h3>
+          </div>
+          <div class="bg-white p-6 rounded-xl border border-corporate-border shadow-xs">
+            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Base de Datos</p>
+            <h3 class="text-xl font-bold text-blue-600 mt-2">Neon PostgreSQL</h3>
+          </div>
+          <div class="bg-white p-6 rounded-xl border border-corporate-border shadow-xs">
+            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Método de Inventario</p>
+            <h3 class="text-xl font-bold text-slate-700 mt-2">FIFO (Lotes)</h3>
+          </div>
+        </div>
+
+        <!-- Sección de Tabla / Lotes -->
+        <div class="bg-white rounded-xl border border-corporate-border shadow-xs overflow-hidden">
+          <div class="px-6 py-4 border-b border-corporate-border flex justify-between items-center">
+            <h3 class="font-bold text-slate-700">Inventario Actual por Lotes</h3>
+            <button onclick="cargarInventario()" class="bg-corporate-primary hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition shadow-xs">
+              Actualizar Datos
+            </button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-corporate-border">
+                  <th class="px-6 py-3 font-semibold">SKU</th>
+                  <th class="px-6 py-3 font-semibold">Producto</th>
+                  <th class="px-6 py-3 font-semibold">Categoría</th>
+                  <th class="px-6 py-3 font-semibold">Stock Restante</th>
+                  <th class="px-6 py-3 font-semibold">Costo Unitario</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-corporate-border text-sm text-slate-600" id="tabla-inventario">
+                <tr>
+                  <td colspan="5" class="px-6 py-6 text-center text-slate-400">Cargando existencias...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- JavaScript para consumir las rutas que ya creaste en tu index.js -->
+  <script>
+    const token = localStorage.getItem('token');
+    if (!token) {
+      window.location.href = '/login.html'; // Si no hay token, lo manda al login
+    }
+
+    function cerrarSesion() {
+      localStorage.removeItem('token');
+      window.location.href = '/login.html';
+    }
+
+    async function cargarInventario() {
+      try {
+        const res = await fetch('/api/inventario-lotes');
+        const lotes = await res.json();
+        const tbody = document.getElementById('tabla-inventario');
+        
+        if (lotes.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="5" class="px-6 py-6 text-center text-slate-400">No hay lotes registrados todavía.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = lotes.map(lote => `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="px-6 py-4 font-medium text-slate-800">${lote.sku}</td>
+            <td class="px-6 py-4">${lote.nombre}</td>
+            <td class="px-6 py-4">${lote.categoria_nombre || 'General'}</td>
+            <td class="px-6 py-4"><span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700">${lote.stock_restante} uds</span></td>
+            <td class="px-6 py-4 font-medium text-slate-700">$${Number(lote.costo_unitario).toFixed(2)}</td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        console.error("Error al cargar inventario:", err);
+      }
+    }
+
+    cargarInventario();
+  </script>
 </body>
 </html>

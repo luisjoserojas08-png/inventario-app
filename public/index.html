@@ -34,7 +34,7 @@ function verificarToken(req, res, next) {
 function verificarRol(rolesPermitidos) {
     return (req, res, next) => {
         if (!req.user || !rolesPermitidos.includes(req.user.rol)) {
-            return res.status(403).json({ error: 'Acceso denegado: No tienes permisos suficientes para esta acción.' });
+            return res.status(403).json({ error: 'Acceso denegado: No tienes permisos suficientes.' });
         }
         next();
     };
@@ -71,7 +71,7 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-// 3. DASHBOARD (Todos los roles autenticados)
+// 3. DASHBOARD
 app.get('/api/inventario-lotes', verificarToken, async (req, res) => {
     try {
         const query = `
@@ -91,7 +91,7 @@ app.get('/api/inventario-lotes', verificarToken, async (req, res) => {
     }
 });
 
-// 4. CREAR PRODUCTO (Admin y Supervisor)
+// 4. CREAR PRODUCTO
 app.post('/api/productos', verificarToken, verificarRol(['Administrador', 'Supervisor']), async (req, res) => {
     const { sku, nombre, categoria_id } = req.body;
     try {
@@ -116,7 +116,7 @@ app.get('/api/productos', verificarToken, async (req, res) => {
     }
 });
 
-// 6. REGISTRAR LOTE (Admin y Supervisor)
+// 6. REGISTRAR LOTE
 app.post('/api/entradas', verificarToken, verificarRol(['Administrador', 'Supervisor']), async (req, res) => {
     const { producto_id, cantidad, costo_unitario } = req.body;
     const client = await pool.connect();
@@ -143,7 +143,7 @@ app.post('/api/entradas', verificarToken, verificarRol(['Administrador', 'Superv
     }
 });
 
-// 7. CATEGORÍAS (Creación solo Admin)
+// 7. CATEGORÍAS
 app.post('/api/categorias', verificarToken, verificarRol(['Administrador']), async (req, res) => {
     const { nombre } = req.body;
     try {
@@ -163,7 +163,7 @@ app.get('/api/categorias', verificarToken, async (req, res) => {
     }
 });
 
-// 8. DESCARGAR REPORTE EXCEL (Todos los roles)
+// 8. DESCARGAR REPORTE EXCEL
 app.get('/api/reporte-salidas', verificarToken, async (req, res) => {
     try {
         const workbook = new ExcelJS.Workbook();

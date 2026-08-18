@@ -190,16 +190,25 @@ app.post('/api/entradas', verificarToken, verificarRol(['Administrador', 'Superv
     }
 });
 
-// 6.1 REGISTRAR SALIDAS
+// 6.1 REGISTRAR SALIDAS (FIFO - Descontando lotes activos)
 app.post('/api/salidas', verificarToken, verificarRol(['Administrador', 'Supervisor']), async (req, res) => {
     const { producto_id, cantidad, concepto } = req.body;
     const client = await pool.connect();
+    
     try {
         await client.query('BEGIN');
         
-        const prod = await client.query('SELECT stock_actual FROM productos WHERE id = $1 FOR UPDATE', [producto_id]);
-        if (prod.rows[0].stock_actual < cantidad) {
-            throw new Error('Stock insuficiente para realizar esta salida');
+        let cantidadPendiente = parseInt(cantidad);
+
+        const lotesRes = await client.query(
+            `SELECT id, stock_restante FROM entradas WHERE producto_id = $1 AND stock_restante > 0 ORDER BY fecha ASC FOR UPDATE`,
+            [producto_id]
+        );
+
+        const stockTotalDisponible = lotesRes.rows.reduce((acc, lote) => acc + lote.stock_restante, 0);
+
+        if (stockTotalDisponible < cantidadPendiente) {
+            throw new Error(`Stock insuficiente. Stock disponible: ${stockTotalDisponible}, solicitado: ${cantidadPendiente}`);
         }
 
         await client.query(
@@ -207,13 +216,26 @@ app.post('/api/salidas', verificarToken, verificarRol(['Administrador', 'Supervi
             [producto_id, cantidad, concepto]
         );
 
-        await client.query(
-            `UPDATE productos SET stock_actual = stock_actual - $1 WHERE id = $2`,
-            [cantidad, producto_id]
-        );
+        for (const lote of lotesRes.rows) {
+            if (cantidadPendiente <= 0) break;
+
+            if (lote.stock_restante >= cantidadPendiente) {
+                await client.query(
+                    `UPDATE entradas SET stock_restante = stock_restante - $1 WHERE id = $2`,
+                    [cantidadPendiente, lote.id]
+                );
+                cantidadPendiente = 0;
+            } else {
+                cantidadPendiente -= lote.stock_restante;
+                await client.query(
+                    `UPDATE entradas SET stock_restante = 0 WHERE id = $1`,
+                    [lote.id]
+                );
+            }
+        }
 
         await client.query('COMMIT');
-        res.status(201).json({ mensaje: 'Salida registrada correctamente' });
+        res.status(201).json({ mensaje: 'Salida registrada y lotes descontados correctamente' });
     } catch (error) {
         await client.query('ROLLBACK');
         res.status(400).json({ error: error.message || 'Error al procesar salida' });
@@ -242,7 +264,38 @@ app.get('/api/categorias', verificarToken, async (req, res) => {
     }
 });
 
-// 8. DESCARGAR REPORTE EXCEL
+// 8. REPORTES HISTORIALES
+app.get('/api/reporte/entradas', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT e.id, p.sku, p.nombre AS producto_nombre, e.cantidad, e.costo_unitario, e.stock_restante, e.fecha
+            FROM entradas e
+            JOIN productos p ON e.producto_id = p.id
+            ORDER BY e.fecha DESC;
+        `;
+        const resultado = await pool.query(query);
+        res.json(resultado.rows);
+    } catch (error) {
+        res.status(500).json({ error: 'Error al consultar el historial de entradas' });
+    }
+});
+
+app.get('/api/reporte/salidas', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT s.id, p.sku, p.nombre AS producto_nombre, s.cantidad, s.concepto, s.fecha
+            FROM salidas s
+            JOIN productos p ON s.producto_id = p.id
+            ORDER BY s.fecha DESC;
+        `;
+        const resultado = await pool.query(query);
+        res.json(resultado.rows);
+    } catch (error) {
+        res.status(500).json({ error: 'Error al consultar el historial de salidas' });
+    }
+});
+
+// 9. DESCARGAR REPORTE EXCEL
 app.get('/api/reporte-salidas', verificarToken, async (req, res) => {
     try {
         const workbook = new ExcelJS.Workbook();
@@ -275,34 +328,3 @@ app.get('/api/reporte-salidas', verificarToken, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor en puerto ${PORT} blindado y seguro`));
-// 9. REPORTE HISTORIAL DE ENTRADAS
-app.get('/api/reporte/entradas', verificarToken, async (req, res) => {
-    try {
-        const query = `
-            SELECT e.id, p.sku, p.nombre AS producto_nombre, e.cantidad, e.costo_unitario, e.stock_restante, e.fecha
-            FROM entradas e
-            JOIN productos p ON e.producto_id = p.id
-            ORDER BY e.fecha DESC;
-        `;
-        const resultado = await pool.query(query);
-        res.json(resultado.rows);
-    } catch (error) {
-        res.status(500).json({ error: 'Error al consultar el historial de entradas' });
-    }
-});
-
-// 10. REPORTE HISTORIAL DE SALIDAS
-app.get('/api/reporte/salidas', verificarToken, async (req, res) => {
-    try {
-        const query = `
-            SELECT s.id, p.sku, p.nombre AS producto_nombre, s.cantidad, s.concepto, s.fecha
-            FROM salidas s
-            JOIN productos p ON s.producto_id = p.id
-            ORDER BY s.fecha DESC;
-        `;
-        const resultado = await pool.query(query);
-        res.json(resultado.rows);
-    } catch (error) {
-        res.status(500).json({ error: 'Error al consultar el historial de salidas' });
-    }
-});

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Movimientos - ERP</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="navbar">
+        <a href="index.html">🏠 Inicio</a>
+        <a href="maestros.html">📦 Datos Maestros</a>
+        <a href="movimientos.html">🔄 Movimientos</a>
+        <a href="inventario.html">📊 Inventario</a>
+        <a href="#" onclick="cerrarSesion()" style="background-color: #dc3545; float: right; margin-right: 20px;">🚪 Cerrar Sesión</a>
+    </div>
+
+    <div class="container grid-2">
+        <div class="panel" style="border-top-color: #28a745;">
+            <h3 style="color: #28a745;">(+) Registrar Entrada</h3>
+            <form id="entradaForm">
+                <div class="form-group"><label>Producto:</label><select id="ent_producto" required></select></div>
+                <div class="form-group"><label>Cantidad:</label><input type="number" id="ent_cantidad" min="1" required></div>
+                <div class="form-group"><label>Costo Unitario ($):</label><input type="number" step="0.01" id="ent_costo" required></div>
+                <button type="submit" class="btn-entrada">Ingresar Stock</button>
+            </form>
+        </div>
+
+        <div class="panel" style="border-top-color: #dc3545;">
+            <h3 style="color: #dc3545;">(-) Registrar Salida</h3>
+            <form id="salidaForm">
+                <div class="form-group"><label>Producto:</label><select id="sal_producto" required></select></div>
+                <div class="form-group"><label>Cantidad:</label><input type="number" id="sal_cantidad" min="1" required></div>
+                <div class="form-group"><label>Motivo/Doc:</label><input type="text" id="sal_motivo" required></div>
+                <button type="submit" class="btn-salida">Retirar Stock</button>
+            </form>
+            <button type="button" class="btn-excel" onclick="window.open('/api/reporte-salidas', '_blank')">📊 Descargar Excel de Salidas</button>
+        </div>
+    </div>
+
+    <script>
+        // SEGURIDAD
+        const token = localStorage.getItem('erp_token');
+        if (!token) window.location.href = 'login.html';
+
+        function cerrarSesion() {
+            localStorage.removeItem('erp_token');
+            localStorage.removeItem('erp_usuario');
+            window.location.href = 'login.html';
+        }
+
+        async function cargarProductos() {
+            const res = await fetch('/api/productos');
+            const productos = await res.json();
+            const comboEnt = document.getElementById('ent_producto');
+            const comboSal = document.getElementById('sal_producto');
+            comboEnt.innerHTML = comboSal.innerHTML = '<option value="">Seleccione...</option>';
+            productos.forEach(p => {
+                const opt = `<option value="${p.id}">${p.sku} - ${p.nombre} (Disp: ${p.stock_actual})</option>`;
+                comboEnt.innerHTML += opt; comboSal.innerHTML += opt;
+            });
+        }
+
+        // ENVIAR EL TOKEN AL GUARDAR
+        async function enviarPost(url, payload, formId) {
+            const res = await fetch(url, { 
+                method: 'POST', 
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token 
+                }, 
+                body: JSON.stringify(payload) 
+            });
+            const data = await res.json();
+            if (res.ok) { 
+                document.getElementById(formId).reset(); 
+                cargarProductos(); 
+                alert('✅ ' + (data.mensaje || 'Éxito')); 
+            } else { 
+                alert('❌ Error: ' + data.error); 
+                if(res.status === 401 || res.status === 403) cerrarSesion();
+            }
+        }
+
+        document.getElementById('entradaForm').onsubmit = (e) => { e.preventDefault(); enviarPost('/api/entradas', { producto_id: document.getElementById('ent_producto').value, cantidad: document.getElementById('ent_cantidad').value, costo_unitario: document.getElementById('ent_costo').value }, 'entradaForm'); };
+        document.getElementById('salidaForm').onsubmit = (e) => { e.preventDefault(); enviarPost('/api/salidas', { producto_id: document.getElementById('sal_producto').value, cantidad: document.getElementById('sal_cantidad').value, motivo: document.getElementById('sal_motivo').value }, 'salidaForm'); };
+
+        window.onload = cargarProductos;
+    </script>
+</body>
+</html>

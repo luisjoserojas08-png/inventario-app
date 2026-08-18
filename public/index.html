@@ -2,255 +2,46 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ERP - Gestión de Inventario</title>
-    <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #eef2f5; margin: 0; padding: 20px; color: #333; }
-        .dashboard { max-width: 1100px; margin: 0 auto; display: grid; gap: 20px; grid-template-columns: 1fr 1fr; }
-        .panel { background: white; padding: 20px; border-radius: 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border-top: 4px solid #0056b3; }
-        .panel-full { grid-column: span 2; border-top: 4px solid #28a745; }
-        h1 { text-align: center; color: #004085; margin-bottom: 30px; grid-column: span 2; }
-        h3 { margin-top: 0; color: #333; border-bottom: 1px solid #eee; padding-bottom: 10px; }
-        .form-group { margin-bottom: 12px; }
-        label { display: block; font-size: 13px; font-weight: bold; margin-bottom: 4px; color: #555; }
-        input, select { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
-        button { background-color: #0056b3; color: white; border: none; padding: 9px 15px; cursor: pointer; border-radius: 4px; font-weight: bold; width: 100%; margin-top: 10px; }
-        button:hover { background-color: #004494; }
-        .btn-salida { background-color: #dc3545; }
-        .btn-salida:hover { background-color: #c82333; }
-        .btn-entrada { background-color: #28a745; }
-        .btn-entrada:hover { background-color: #218838; }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px; }
-        th, td { border: 1px solid #dee2e6; padding: 10px; text-align: left; }
-        th { background-color: #f8f9fa; color: #495057; }
-        .badge-danger { background: #dc3545; color: white; padding: 3px 8px; border-radius: 12px; font-size: 12px; }
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    </style>
+    <title>Inicio - ERP Inventario</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
-<div class="dashboard">
-    <h1>📊 Sistema de Gestión y Control de Inventario</h1>
-
-    <!-- PANEL IZQUIERDO: MOVIMIENTOS -->
-    <div class="panel">
-        <h3>Logística de Movimientos</h3>
-        
-        <!-- ENTRADAS -->
-        <form id="entradaForm" style="margin-bottom: 30px; background: #f8fff9; padding: 15px; border-left: 3px solid #28a745;">
-            <h4 style="margin-top:0; color: #28a745;">(+) Registrar Entrada</h4>
-            <div class="form-group">
-                <label>Producto:</label>
-                <select id="ent_producto" required><option value="">Cargando...</option></select>
-            </div>
-            <div class="grid-2">
-                <div class="form-group">
-                    <label>Cantidad:</label>
-                    <input type="number" id="ent_cantidad" min="1" required>
-                </div>
-                <div class="form-group">
-                    <label>Costo Unitario ($):</label>
-                    <input type="number" step="0.01" id="ent_costo" required>
-                </div>
-            </div>
-            <button type="submit" class="btn-entrada">Ingresar Stock</button>
-        </form>
-
-        <!-- SALIDAS -->
-        <form id="salidaForm" style="background: #fff8f8; padding: 15px; border-left: 3px solid #dc3545;">
-            <h4 style="margin-top:0; color: #dc3545;">(-) Registrar Salida</h4>
-            <div class="form-group">
-                <label>Producto:</label>
-                <select id="sal_producto" required><option value="">Cargando...</option></select>
-            </div>
-            <div class="grid-2">
-                <div class="form-group">
-                    <label>Cantidad:</label>
-                    <input type="number" id="sal_cantidad" min="1" required>
-                </div>
-                <div class="form-group">
-                    <label>Motivo/Doc:</label>
-                    <input type="text" id="sal_motivo" placeholder="Ej. Venta #001, Merma" required>
-                </div>
-            </div>
-            <button type="submit" class="btn-salida">Retirar Stock</button>
-        </form>
+    <!-- BARRA DE NAVEGACIÓN -->
+    <div class="navbar">
+        <a href="index.html">🏠 Inicio</a>
+        <a href="maestros.html">📦 Datos Maestros</a>
+        <a href="movimientos.html">🔄 Movimientos</a>
+        <a href="inventario.html">📊 Inventario</a>
+        <a href="#" onclick="cerrarSesion()" style="background-color: #dc3545; float: right; margin-right: 20px;">🚪 Cerrar Sesión</a>
     </div>
 
-    <!-- PANEL DERECHO: MAESTROS (Categorias y Productos) -->
-    <div class="panel">
-        <h3>Datos Maestros</h3>
-        
-        <form id="categoriaForm" style="margin-bottom: 20px;">
-            <div class="grid-2">
-                <div class="form-group">
-                    <label>Nueva Categoría:</label>
-                    <input type="text" id="nueva_cat" required>
-                </div>
-                <div class="form-group" style="display:flex; align-items:flex-end;">
-                    <button type="submit" style="margin:0;">Guardar Cat.</button>
-                </div>
-            </div>
-        </form>
-
-        <form id="productoForm" style="border-top: 1px dashed #ccc; padding-top: 20px;">
-            <div class="grid-2">
-                <div class="form-group">
-                    <label>SKU:</label>
-                    <input type="text" id="prod_sku" required>
-                </div>
-                <div class="form-group">
-                    <label>Nombre:</label>
-                    <input type="text" id="prod_nombre" required>
-                </div>
-            </div>
-            <div class="form-group">
-                <label>Categoría:</label>
-                <select id="prod_cat" required><option value="">Cargando...</option></select>
-            </div>
-            <div class="grid-2">
-                <div class="form-group">
-                    <label>Stock Inicial:</label>
-                    <input type="number" id="prod_stock" value="0" required>
-                </div>
-                <div class="form-group">
-                    <label>Costo Base ($):</label>
-                    <input type="number" step="0.01" id="prod_costo" required>
-                </div>
-            </div>
-            <button type="submit">Crear Producto Nuevo</button>
-        </form>
+    <div class="container">
+        <div class="panel" style="text-align: center; padding: 50px 20px;">
+            <h1>Bienvenido al ERP de Gestión de Inventario</h1>
+            <h2 id="mensaje_bienvenida" style="color: #0056b3; font-weight: normal; margin-bottom: 20px;"></h2>
+            <p>Utiliza el menú superior para navegar entre los módulos del sistema.</p>
+        </div>
     </div>
 
-    <!-- PANEL INFERIOR: VISOR DE INVENTARIO -->
-    <div class="panel panel-full">
-        <h3>Estado de Inventario en Tiempo Real</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>SKU</th>
-                    <th>Categoría</th>
-                    <th>Nombre</th>
-                    <th>Costo</th>
-                    <th>Stock Actual</th>
-                    <th>Estado</th>
-                </tr>
-            </thead>
-            <tbody id="tablaInventario"></tbody>
-        </table>
-    </div>
-</div>
-
-<script>
-    // --- LÓGICA JAVASCRIPT ---
-    const API = { cat: '/api/categorias', prod: '/api/productos', ent: '/api/entradas', sal: '/api/salidas' };
-
-    async function cargarDatos() {
-        try {
-            // 1. Cargar Categorías
-            const resCat = await fetch(API.cat);
-            const categorias = await resCat.json();
-            const comboCat = document.getElementById('prod_cat');
-            comboCat.innerHTML = '<option value="">Seleccione...</option>';
-            categorias.forEach(c => comboCat.innerHTML += `<option value="${c.id}">${c.nombre}</option>`);
-
-            // 2. Cargar Productos
-            const resProd = await fetch(API.prod);
-            const productos = await resProd.json();
-            
-            const tabla = document.getElementById('tablaInventario');
-            const comboEnt = document.getElementById('ent_producto');
-            const comboSal = document.getElementById('sal_producto');
-            
-            tabla.innerHTML = '';
-            comboEnt.innerHTML = '<option value="">Seleccione...</option>';
-            comboSal.innerHTML = '<option value="">Seleccione...</option>';
-
-            productos.forEach(p => {
-                // Validación de stock mínimo
-                const estadoHTML = p.stock_actual <= p.stock_minimo 
-                    ? '<span class="badge-danger">Reabastecer</span>' 
-                    : '<span style="color:#28a745; font-weight:bold;">Óptimo</span>';
-
-                tabla.innerHTML += `
-                    <tr>
-                        <td><strong>${p.sku}</strong></td>
-                        <td>${p.categoria_nombre || 'N/A'}</td>
-                        <td>${p.nombre}</td>
-                        <td>$${parseFloat(p.precio_costo).toFixed(2)}</td>
-                        <td style="font-size: 16px; font-weight: bold;">${p.stock_actual}</td>
-                        <td>${estadoHTML}</td>
-                    </tr>
-                `;
-                const option = `<option value="${p.id}">${p.sku} - ${p.nombre} (Disp: ${p.stock_actual})</option>`;
-                comboEnt.innerHTML += option;
-                comboSal.innerHTML += option;
-            });
-        } catch (error) {
-            console.error('Error cargando la data:', error);
+    <script>
+        // 1. SEGURIDAD: Verificar si el usuario tiene un Token
+        const token = localStorage.getItem('erp_token');
+        if (!token) {
+            window.location.href = 'login.html'; // Lo expulsa si no está logueado
         }
-    }
 
-    // Funciones genéricas para peticiones POST
-    async function enviarPost(url, payload, formId) {
-        try {
-            const res = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            const data = await res.json();
-            if (res.ok) {
-                document.getElementById(formId).reset();
-                cargarDatos(); // Refrescar todo
-                alert('✅ Operación exitosa');
-            } else {
-                alert('❌ Error: ' + data.error);
-            }
-        } catch (error) {
-            alert('Error de conexión.');
+        // 2. PERSONALIZACIÓN: Mostrar el nombre del usuario
+        const usuario = localStorage.getItem('erp_usuario');
+        if (usuario) {
+            document.getElementById('mensaje_bienvenida').innerText = 'Hola, ' + usuario;
         }
-    }
 
-    // Listeners de Formularios
-    document.getElementById('categoriaForm').onsubmit = (e) => {
-        e.preventDefault();
-        enviarPost(API.cat, { nombre: document.getElementById('nueva_cat').value }, 'categoriaForm');
-    };
-
-    document.getElementById('productoForm').onsubmit = (e) => {
-        e.preventDefault();
-        enviarPost(API.prod, {
-            sku: document.getElementById('prod_sku').value,
-            nombre: document.getElementById('prod_nombre').value,
-            categoria_id: document.getElementById('prod_cat').value,
-            stock_actual: document.getElementById('prod_stock').value,
-            stock_minimo: 5,
-            precio_costo: document.getElementById('prod_costo').value
-        }, 'productoForm');
-    };
-
-    document.getElementById('entradaForm').onsubmit = (e) => {
-        e.preventDefault();
-        enviarPost(API.ent, {
-            producto_id: document.getElementById('ent_producto').value,
-            cantidad: document.getElementById('ent_cantidad').value,
-            costo_unitario: document.getElementById('ent_costo').value
-        }, 'entradaForm');
-    };
-
-    document.getElementById('salidaForm').onsubmit = (e) => {
-        e.preventDefault();
-        enviarPost(API.sal, {
-            producto_id: document.getElementById('sal_producto').value,
-            cantidad: document.getElementById('sal_cantidad').value,
-            motivo: document.getElementById('sal_motivo').value
-        }, 'salidaForm');
-    };
-
-    // Inicializar
-    window.onload = cargarDatos;
-</script>
-
+        // 3. FUNCIÓN DE SALIDA
+        function cerrarSesion() {
+            localStorage.removeItem('erp_token');
+            localStorage.removeItem('erp_usuario');
+            window.location.href = 'login.html';
+        }
+    </script>
 </body>
 </html>

@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Acceso - ERP Inventario</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body { display: flex; align-items: center; justify-content: center; height: 100vh; background-color: #004085; }
+        .login-container { max-width: 400px; width: 100%; margin: 0; box-shadow: 0 4px 15px rgba(0,0,0,0.2); border-top: none; }
+        .tabs { display: flex; margin-bottom: 20px; border-radius: 4px; overflow: hidden; }
+        .tab { flex: 1; padding: 12px; text-align: center; background: #eef2f5; cursor: pointer; font-weight: bold; color: #555; transition: 0.3s; }
+        .tab.active { background: #0056b3; color: white; }
+        .form-section { display: none; }
+        .form-section.active { display: block; }
+    </style>
+</head>
+<body>
+
+    <div class="login-container panel">
+        <h2 style="text-align: center; color: #333;">🔒 Acceso al Sistema</h2>
+        
+        <div class="tabs">
+            <div class="tab active" id="tabLogin" onclick="switchTab('login')">Iniciar Sesión</div>
+            <div class="tab" id="tabRegistro" onclick="switchTab('registro')">Nuevo Usuario</div>
+        </div>
+
+        <!-- FORMULARIO DE LOGIN -->
+        <form id="formLogin" class="form-section active">
+            <div class="form-group">
+                <label>Correo Electrónico:</label>
+                <input type="email" id="login_correo" required placeholder="ejemplo@empresa.com">
+            </div>
+            <div class="form-group">
+                <label>Contraseña:</label>
+                <input type="password" id="login_password" required>
+            </div>
+            <button type="submit">Ingresar al ERP</button>
+        </form>
+
+        <!-- FORMULARIO DE REGISTRO -->
+        <form id="formRegistro" class="form-section">
+            <div class="form-group">
+                <label>Nombre Completo:</label>
+                <input type="text" id="reg_nombre" required placeholder="Ej. Luis Rojas">
+            </div>
+            <div class="form-group">
+                <label>Correo Electrónico:</label>
+                <input type="email" id="reg_correo" required>
+            </div>
+            <div class="form-group">
+                <label>Contraseña:</label>
+                <input type="password" id="reg_password" required minlength="6">
+            </div>
+            <button type="submit" style="background-color: #28a745;">Crear Administrador</button>
+        </form>
+    </div>
+
+    <script>
+        // Animación de pestañas
+        function switchTab(tab) {
+            document.getElementById('tabLogin').classList.remove('active');
+            document.getElementById('tabRegistro').classList.remove('active');
+            document.getElementById('formLogin').classList.remove('active');
+            document.getElementById('formRegistro').classList.remove('active');
+
+            if(tab === 'login') {
+                document.getElementById('tabLogin').classList.add('active');
+                document.getElementById('formLogin').classList.add('active');
+            } else {
+                document.getElementById('tabRegistro').classList.add('active');
+                document.getElementById('formRegistro').classList.add('active');
+            }
+        }
+
+        // 1. REGISTRAR USUARIO
+        document.getElementById('formRegistro').onsubmit = async (e) => {
+            e.preventDefault();
+            const payload = {
+                nombre: document.getElementById('reg_nombre').value,
+                correo: document.getElementById('reg_correo').value,
+                password: document.getElementById('reg_password').value,
+                rol: 'Administrador'
+            };
+
+            const res = await fetch('/api/usuarios', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+
+            if (res.ok) {
+                alert('✅ ' + data.mensaje + '. Ya puedes iniciar sesión.');
+                document.getElementById('formRegistro').reset();
+                switchTab('login');
+            } else {
+                alert('❌ Error: ' + data.error);
+            }
+        };
+
+        // 2. INICIAR SESIÓN Y GUARDAR TOKEN
+        document.getElementById('formLogin').onsubmit = async (e) => {
+            e.preventDefault();
+            const payload = {
+                correo: document.getElementById('login_correo').value,
+                password: document.getElementById('login_password').value
+            };
+
+            const res = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+
+            if (res.ok) {
+                // Guardamos el token de seguridad en la memoria del navegador
+                localStorage.setItem('erp_token', data.token);
+                localStorage.setItem('erp_usuario', data.usuario.nombre);
+                
+                alert('✅ Bienvenido, ' + data.usuario.nombre);
+                window.location.href = 'index.html'; // Nos lleva al panel principal
+            } else {
+                alert('❌ Error: ' + data.error);
+            }
+        };
+    </script>
+</body>
+</html>

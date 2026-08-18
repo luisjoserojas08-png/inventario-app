@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Inventario - ERP</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="navbar">
+        <a href="index.html">🏠 Inicio</a>
+        <a href="maestros.html">📦 Datos Maestros</a>
+        <a href="movimientos.html">🔄 Movimientos</a>
+        <a href="inventario.html">📊 Inventario</a>
+        <a href="#" onclick="cerrarSesion()" style="background-color: #dc3545; float: right; margin-right: 20px;">🚪 Cerrar Sesión</a>
+    </div>
+
+    <div class="container">
+        <div class="panel">
+            <h3>Estado de Inventario (Por Lotes)</h3>
+            <table>
+                <thead>
+                    <tr><th>Lote #</th><th>SKU</th><th>Producto</th><th>Costo</th><th>Stock Lote</th><th>Fecha</th></tr>
+                </thead>
+                <tbody id="tablaInventario"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // SEGURIDAD
+        const token = localStorage.getItem('erp_token');
+        if (!token) window.location.href = 'login.html';
+
+        function cerrarSesion() {
+            localStorage.removeItem('erp_token');
+            localStorage.removeItem('erp_usuario');
+            window.location.href = 'login.html';
+        }
+
+        async function cargarLotes() {
+            const res = await fetch('/api/inventario-lotes');
+            const lotes = await res.json();
+            const tabla = document.getElementById('tablaInventario');
+            tabla.innerHTML = '';
+            
+            if(lotes.length === 0) {
+                tabla.innerHTML = '<tr><td colspan="6" style="text-align:center;">Sin stock.</td></tr>';
+                return;
+            }
+
+            lotes.forEach(l => {
+                const color = l.stock_restante <= l.stock_minimo ? 'red' : 'green';
+                tabla.innerHTML += `
+                    <tr>
+                        <td><strong>L-${l.lote_id}</strong></td>
+                        <td>${l.sku}</td>
+                        <td>${l.nombre} <small>(${l.categoria_nombre})</small></td>
+                        <td>$${parseFloat(l.costo_unitario).toFixed(2)}</td>
+                        <td style="color:${color}; font-weight:bold;">${l.stock_restante}</td>
+                        <td>${new Date(l.fecha).toLocaleDateString()}</td>
+                    </tr>`;
+            });
+        }
+        
+        window.onload = cargarLotes;
+    </script>
+</body>
+</html>

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Maestros - ERP</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="navbar">
+        <a href="index.html">🏠 Inicio</a>
+        <a href="maestros.html">📦 Datos Maestros</a>
+        <a href="movimientos.html">🔄 Movimientos</a>
+        <a href="inventario.html">📊 Inventario</a>
+        <a href="#" onclick="cerrarSesion()" style="background-color: #dc3545; float: right; margin-right: 20px;">🚪 Cerrar Sesión</a>
+    </div>
+
+    <div class="container">
+        <div class="panel">
+            <h3>Crear Nueva Categoría</h3>
+            <form id="categoriaForm">
+                <div class="grid-2">
+                    <div class="form-group"><input type="text" id="nueva_cat" placeholder="Nombre de categoría" required></div>
+                    <button type="submit" style="margin: 0;">Guardar Categoría</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="panel">
+            <h3>Registrar Nuevo Producto</h3>
+            <form id="productoForm">
+                <div class="grid-2">
+                    <div class="form-group"><label>SKU:</label><input type="text" id="prod_sku" required></div>
+                    <div class="form-group"><label>Nombre:</label><input type="text" id="prod_nombre" required></div>
+                </div>
+                <div class="form-group">
+                    <label>Categoría:</label><select id="prod_cat" required><option value="">Cargando...</option></select>
+                </div>
+                <div class="grid-2">
+                    <div class="form-group"><label>Stock Inicial:</label><input type="number" id="prod_stock" value="0" required></div>
+                    <div class="form-group"><label>Costo Base ($):</label><input type="number" step="0.01" id="prod_costo" required></div>
+                </div>
+                <button type="submit">Crear Producto</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // 1. SEGURIDAD: Verificar si el usuario tiene un Token al abrir la página
+        const token = localStorage.getItem('erp_token');
+        if (!token) {
+            window.location.href = 'login.html'; // Si no tiene, lo expulsa al login
+        }
+
+        function cerrarSesion() {
+            localStorage.removeItem('erp_token');
+            localStorage.removeItem('erp_usuario');
+            window.location.href = 'login.html';
+        }
+
+        async function cargarCategorias() {
+            const res = await fetch('/api/categorias');
+            const categorias = await res.json();
+            const comboCat = document.getElementById('prod_cat');
+            comboCat.innerHTML = '<option value="">Seleccione...</option>';
+            categorias.forEach(c => comboCat.innerHTML += `<option value="${c.id}">${c.nombre}</option>`);
+        }
+
+        // 2. ENVIAR EL TOKEN AL GUARDAR: Aquí le mostramos el "gafete" al servidor
+        async function enviarPost(url, payload, formId) {
+            const res = await fetch(url, { 
+                method: 'POST', 
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token  // <-- ¡EL CANDADO SE ABRE AQUÍ!
+                }, 
+                body: JSON.stringify(payload) 
+            });
+            const data = await res.json();
+            if (res.ok) { 
+                document.getElementById(formId).reset(); 
+                cargarCategorias(); 
+                alert('✅ Guardado con éxito'); 
+            } else { 
+                alert('❌ Error: ' + (data.error || 'No se pudo guardar')); 
+                if(res.status === 401 || res.status === 403) cerrarSesion(); // Si el token expiró, lo saca
+            }
+        }
+
+        document.getElementById('categoriaForm').onsubmit = (e) => {
+            e.preventDefault(); enviarPost('/api/categorias', { nombre: document.getElementById('nueva_cat').value }, 'categoriaForm');
+        };
+        document.getElementById('productoForm').onsubmit = (e) => {
+            e.preventDefault(); enviarPost('/api/productos', { sku: document.getElementById('prod_sku').value, nombre: document.getElementById('prod_nombre').value, categoria_id: document.getElementById('prod_cat').value, stock_actual: document.getElementById('prod_stock').value, stock_minimo: 5, precio_costo: document.getElementById('prod_costo').value }, 'productoForm');
+        };
+
+        window.onload = cargarCategorias;
+    </script>
+</body>
+</html>

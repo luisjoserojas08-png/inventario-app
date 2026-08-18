@@ -1,198 +1,198 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ERP - Control de Inventario</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            colors: {
-              corporate: {
-                dark: '#0f172a',
-                primary: '#1e40af',
-                light: '#f8fafc',
-                border: '#e2e8f0'
-              }
-            }
-          }
-        }
-      }
-    </script>
-</head>
-<body class="bg-corporate-light font-sans text-slate-800 subpixel-antialiased">
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const ExcelJS = require('exceljs');
+const pool = require('./config/db');
 
-  <!-- Validación blindada del token al cargar la página -->
-  <script>
-    const token = localStorage.getItem('erp_token') || localStorage.getItem('token');
-    if (!token) {
-        window.location.href = 'login.html';
-    }
-  </script>
+const app = express();
+const PORT = process.env.PORT || 3000;
+const JWT_SECRET = process.env.JWT_SECRET || 'secreto_super_seguro';
 
-  <div class="flex h-screen overflow-hidden">
-    
-    <!-- Barra Lateral (Sidebar) -->
-    <aside class="w-64 bg-corporate-dark text-slate-300 flex flex-col hidden md:flex">
-      <div class="p-6 text-xl font-bold text-white tracking-wider border-b border-slate-800 flex items-center space-x-2">
-        <span>ERP Genética</span>
-      </div>
-      <nav class="flex-1 p-4 space-y-2">
-  <a href="index.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition">📊 Dashboard Inventario</a>
-  <a href="entradas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition">📥 Registro de Compras</a>
-  <a href="categorias.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition">🏷️ Categorías</a>
-  <!-- BOTÓN CORREGIDO -->
-  <button onclick="descargarReporte()" class="w-full text-left block px-4 py-2.5 rounded-lg bg-corporate-primary text-white font-medium transition shadow-xs">📑 Descargar Reporte Excel</button>
-</nav>
-      <div class="p-4 border-t border-slate-800 text-xs text-slate-500">
-        Sesión Activa • Neon DB
-      </div>
-    </aside>
+app.use(cors());
+app.use(express.json());
+app.use(express.static(path.join(__dirname, '../public')));
 
-    <!-- Contenido Principal -->
-    <div class="flex-1 flex flex-col overflow-y-auto">
-      
-      <!-- Cabecera -->
-      <header class="bg-white border-b border-corporate-border h-16 flex items-center justify-between px-8 shadow-xs">
-        <h1 class="text-lg font-semibold text-slate-700">Panel General de Existencias (Lotes)</h1>
-        <div class="flex items-center space-x-4">
-          <span id="nombreUsuario" class="text-sm font-medium text-slate-600"></span>
-          <button onclick="cerrarSesion()" class="text-sm text-red-600 hover:text-red-800 font-medium bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition">Cerrar Sesión</button>
-        </div>
-      </header>
+app.get('/', (req, res) => res.redirect('/login.html'));
 
-      <!-- Cuerpo -->
-      <main class="p-8">
-        
-        <!-- Tarjetas de Resumen -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div class="bg-white p-6 rounded-xl border border-corporate-border shadow-xs">
-            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Estado del Sistema</p>
-            <h3 class="text-xl font-bold text-emerald-600 mt-2">Operativo (Online)</h3>
-          </div>
-          <div class="bg-white p-6 rounded-xl border border-corporate-border shadow-xs">
-            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Base de Datos</p>
-            <h3 class="text-xl font-bold text-blue-600 mt-2">Neon PostgreSQL</h3>
-          </div>
-          <div class="bg-white p-6 rounded-xl border border-corporate-border shadow-xs">
-            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Método de Inventario</p>
-            <h3 class="text-xl font-bold text-slate-700 mt-2">FIFO (Lotes)</h3>
-          </div>
-        </div>
+// Middleware de autenticación por Token
+function verificarToken(req, res, next) {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader) return res.status(401).json({ error: 'Token requerido' });
+    const token = authHeader.split(' ')[1];
+    if (!token) return res.status(401).json({ error: 'Formato de token inválido' });
 
-        <!-- Sección de Tabla / Lotes -->
-        <div class="bg-white rounded-xl border border-corporate-border shadow-xs overflow-hidden">
-          <div class="px-6 py-4 border-b border-corporate-border flex justify-between items-center">
-            <h3 class="font-bold text-slate-700">Inventario Actualizado</h3>
-            <button onclick="cargarInventario()" class="bg-corporate-primary hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition shadow-xs">
-              Actualizar Datos
-            </button>
-          </div>
-          <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse">
-              <thead>
-                <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-corporate-border">
-                  <th class="px-6 py-3 font-semibold">SKU</th>
-                  <th class="px-6 py-3 font-semibold">Producto</th>
-                  <th class="px-6 py-3 font-semibold">Categoría</th>
-                  <th class="px-6 py-3 font-semibold">Stock Restante</th>
-                  <th class="px-6 py-3 font-semibold">Costo Unitario ($)</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-corporate-border text-sm text-slate-600" id="tabla-inventario">
-                <tr>
-                  <td colspan="5" class="px-6 py-6 text-center text-slate-400">Cargando existencias...</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-      </main>
-    </div>
-  </div>
-
-  <!-- Lógica y consumo de API -->
-  <script>
-    // Mostrar nombre de usuario si está guardado
-    const nombreGuardado = localStorage.getItem('erp_usuario');
-    if (nombreGuardado) {
-      document.getElementById('nombreUsuario').innerText = `Hola, ${nombreGuardado}`;
-    }
-async function descargarReporte() {
-    try {
-        const res = await fetch('/api/reporte-salidas', {
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
-
-        if (!res.ok) {
-            alert("Error: Tu sesión expiró o no tienes permisos.");
-            return;
-        }
-
-        const blob = await res.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'reporte_inventario.xlsx';
-        document.body.appendChild(a);
-        a.click();
-
-        a.remove();
-        window.URL.revokeObjectURL(url);
-    } catch (error) {
-        console.error("Error al descargar:", error);
-        alert("Hubo un error al intentar descargar el Excel.");
-    }
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+        if (err) return res.status(403).json({ error: 'Token inválido o expirado' });
+        req.user = user;
+        next();
+    });
 }
-    function cerrarSesion() {
-      localStorage.removeItem('erp_token');
-      localStorage.removeItem('token');
-      localStorage.removeItem('erp_usuario');
-      window.location.href = 'login.html';
-    }
 
-    async function cargarInventario() {
-      try {
-        const res = await fetch('/api/inventario-lotes', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        
-        if (res.status === 401 || res.status === 403) {
-          cerrarSesion();
-          return;
+// Middleware de control de roles (RBAC)
+function verificarRol(rolesPermitidos) {
+    return (req, res, next) => {
+        if (!req.user || !rolesPermitidos.includes(req.user.rol)) {
+            return res.status(403).json({ error: 'Acceso denegado: No tienes permisos suficientes para esta acción.' });
         }
+        next();
+    };
+}
 
-        const lotes = await res.json();
-        const tbody = document.getElementById('tabla-inventario');
-        
-        if (!Array.isArray(lotes) || lotes.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="5" class="px-6 py-6 text-center text-slate-400">No hay lotes registrados todavía.</td></tr>`;
-          return;
-        }
-
-        tbody.innerHTML = lotes.map(lote => `
-          <tr class="hover:bg-slate-50 transition">
-            <td class="px-6 py-4 font-medium text-slate-800">${lote.sku}</td>
-            <td class="px-6 py-4">${lote.nombre}</td>
-            <td class="px-6 py-4">${lote.categoria_nombre || 'General'}</td>
-            <td class="px-6 py-4"><span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700">${lote.stock_restante} uds</span></td>
-            <td class="px-6 py-4 font-medium text-slate-700">$${Number(lote.costo_unitario).toFixed(2)}</td>
-          </tr>
-        `).join('');
-      } catch (err) {
-        console.error("Error al cargar inventario:", err);
-      }
+// 1. REGISTRO (Solo Admin)
+app.post('/api/usuarios', verificarToken, verificarRol(['Administrador']), async (req, res) => {
+    const { nombre, correo, password, rol } = req.body;
+    try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const query = `INSERT INTO usuarios (nombre, correo, password, rol) VALUES ($1, $2, $3, $4) RETURNING id, nombre, correo, rol`;
+        const nuevoUsuario = await pool.query(query, [nombre, correo, hashedPassword, rol || 'Administrador']);
+        res.status(201).json({ mensaje: 'Usuario registrado con éxito', usuario: nuevoUsuario.rows[0] });
+    } catch (error) {
+        res.status(500).json({ error: 'El correo ya está registrado o hubo un error' });
     }
+});
 
-    cargarInventario();
-  </script>
-</body>
-</html>
+// 2. LOGIN
+app.post('/api/login', async (req, res) => {
+    const { correo, password } = req.body;
+    try {
+        const resultado = await pool.query('SELECT * FROM usuarios WHERE correo = $1', [correo]);
+        if (resultado.rows.length === 0) return res.status(400).json({ error: 'Credenciales incorrectas' });
+
+        const usuario = resultado.rows[0];
+        const passwordValido = await bcrypt.compare(password, usuario.password);
+        if (!passwordValido) return res.status(400).json({ error: 'Credenciales incorrectas' });
+
+        const token = jwt.sign({ id: usuario.id, correo: usuario.correo, rol: usuario.rol }, JWT_SECRET, { expiresIn: '8h' });
+        res.json({ token, usuario: { id: usuario.id, nombre: usuario.nombre, correo: usuario.correo, rol: usuario.rol } });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// 3. DASHBOARD (Todos los roles autenticados)
+app.get('/api/inventario-lotes', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT p.sku, p.nombre, c.nombre AS categoria_nombre, 
+                   COALESCE(SUM(e.stock_restante), 0) AS stock_restante, 
+                   COALESCE(e.costo_unitario, 0) AS costo_unitario
+            FROM productos p
+            LEFT JOIN categorias c ON p.categoria_id = c.id
+            LEFT JOIN entradas e ON p.id = e.producto_id AND e.stock_restante > 0
+            GROUP BY p.id, p.sku, p.nombre, c.nombre, e.costo_unitario
+            ORDER BY p.nombre ASC;
+        `;
+        const resultado = await pool.query(query);
+        res.json(resultado.rows);
+    } catch (error) {
+        res.status(500).json({ error: 'Error al consultar las existencias' });
+    }
+});
+
+// 4. CREAR PRODUCTO (Admin y Supervisor)
+app.post('/api/productos', verificarToken, verificarRol(['Administrador', 'Supervisor']), async (req, res) => {
+    const { sku, nombre, categoria_id } = req.body;
+    try {
+        const query = `INSERT INTO productos (sku, nombre, categoria_id, stock_actual, stock_minimo, precio_costo) VALUES ($1, $2, $3, 0, 5, 0) RETURNING *`;
+        const resultado = await pool.query(query, [sku, nombre, categoria_id || 1]);
+        res.status(201).json({ mensaje: 'Producto creado', producto: resultado.rows[0] });
+    } catch (error) {
+        if (error.code === '23505') {
+            return res.status(400).json({ error: 'El código SKU ya está registrado en otro producto.' });
+        }
+        res.status(500).json({ error: 'Error al crear el producto' });
+    }
+});
+
+// 5. LISTAR PRODUCTOS
+app.get('/api/productos', verificarToken, async (req, res) => {
+    try {
+        const resultado = await pool.query('SELECT id, sku, nombre FROM productos ORDER BY nombre ASC');
+        res.json(resultado.rows);
+    } catch (error) {
+        res.status(500).json({ error: 'Error al listar productos' });
+    }
+});
+
+// 6. REGISTRAR LOTE (Admin y Supervisor)
+app.post('/api/entradas', verificarToken, verificarRol(['Administrador', 'Supervisor']), async (req, res) => {
+    const { producto_id, cantidad, costo_unitario } = req.body;
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        
+        await client.query(
+            `UPDATE productos SET stock_actual = stock_actual + $1, precio_costo = $2 WHERE id = $3`,
+            [cantidad, costo_unitario, producto_id]
+        );
+
+        const entradaResult = await client.query(
+            `INSERT INTO entradas (producto_id, cantidad, costo_unitario, stock_restante) VALUES ($1, $2, $3, $4) RETURNING id`,
+            [producto_id, cantidad, costo_unitario, cantidad]
+        );
+
+        await client.query('COMMIT');
+        res.status(201).json({ mensaje: 'Lote registrado con éxito', entradaId: entradaResult.rows[0].id });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: 'Error al procesar la entrada' });
+    } finally {
+        client.release();
+    }
+});
+
+// 7. CATEGORÍAS (Creación solo Admin)
+app.post('/api/categorias', verificarToken, verificarRol(['Administrador']), async (req, res) => {
+    const { nombre } = req.body;
+    try {
+        const resultado = await pool.query(`INSERT INTO categorias (nombre) VALUES ($1) RETURNING *`, [nombre]);
+        res.status(201).json({ mensaje: 'Categoría registrada', categoria: resultado.rows[0] });
+    } catch (error) {
+        res.status(500).json({ error: 'Error al registrar categoría' });
+    }
+});
+
+app.get('/api/categorias', verificarToken, async (req, res) => {
+    try {
+        const resultado = await pool.query('SELECT * FROM categorias ORDER BY nombre ASC');
+        res.json(resultado.rows);
+    } catch (error) {
+        res.status(500).json({ error: 'Error al consultar categorías' });
+    }
+});
+
+// 8. DESCARGAR REPORTE EXCEL (Todos los roles)
+app.get('/api/reporte-salidas', verificarToken, async (req, res) => {
+    try {
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Inventario');
+        worksheet.columns = [
+            { header: 'SKU', key: 'sku', width: 15 },
+            { header: 'Producto', key: 'nombre', width: 30 },
+            { header: 'Categoría', key: 'categoria_nombre', width: 20 },
+            { header: 'Stock Restante', key: 'stock_restante', width: 15 },
+            { header: 'Costo Unitario ($)', key: 'costo_unitario', width: 18 }
+        ];
+
+        const query = `
+            SELECT p.sku, p.nombre, c.nombre AS categoria_nombre, COALESCE(SUM(e.stock_restante), 0) AS stock_restante, COALESCE(e.costo_unitario, 0) AS costo_unitario
+            FROM productos p
+            LEFT JOIN categorias c ON p.categoria_id = c.id
+            LEFT JOIN entradas e ON p.id = e.producto_id AND e.stock_restante > 0
+            GROUP BY p.id, p.sku, p.nombre, c.nombre, e.costo_unitario ORDER BY p.nombre ASC;
+        `;
+        const resultado = await pool.query(query);
+        worksheet.addRows(resultado.rows);
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename="reporte_inventario.xlsx"');
+        await workbook.xlsx.write(res);
+        res.end();
+    } catch (error) {
+        res.status(500).json({ error: 'Error al generar reporte' });
+    }
+});
+
+app.listen(PORT, () => console.log(`Servidor en puerto ${PORT} blindado y seguro`));

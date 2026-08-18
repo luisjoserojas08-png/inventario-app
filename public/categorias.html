@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERP - Categorías</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: { extend: { colors: { corporate: { dark: '#0f172a', primary: '#1e40af', light: '#f8fafc', border: '#e2e8f0' } } } }
+      }
+    </script>
+</head>
+<body class="bg-corporate-light font-sans text-slate-800 subpixel-antialiased">
+
+  <script>
+    const token = localStorage.getItem('erp_token') || localStorage.getItem('token');
+    if (!token) window.location.href = 'login.html';
+  </script>
+
+  <div class="flex h-screen overflow-hidden">
+    <!-- Sidebar -->
+    <aside class="w-64 bg-corporate-dark text-slate-300 flex flex-col hidden md:flex">
+      <div class="p-6 text-xl font-bold text-white tracking-wider border-b border-slate-800 flex items-center space-x-2">
+        <span>ERP Genética</span>
+      </div>
+      <nav class="flex-1 p-4 space-y-2">
+        <a href="index.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition">📊 Dashboard Inventario</a>
+        <a href="entradas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition">📥 Registro de Compras</a>
+        <a href="categorias.html" class="block px-4 py-2.5 rounded-lg bg-corporate-primary text-white font-medium transition shadow-xs">🏷️ Categorías</a>
+      </nav>
+      <div class="p-4 border-t border-slate-800 text-xs text-slate-500">Sesión Activa • Neon DB</div>
+    </aside>
+
+    <!-- Contenido Principal -->
+    <div class="flex-1 flex flex-col overflow-y-auto">
+      <header class="bg-white border-b border-corporate-border h-16 flex items-center justify-between px-8 shadow-xs">
+        <h1 class="text-lg font-semibold text-slate-700">Mantenimiento de Categorías</h1>
+        <button onclick="cerrarSesion()" class="text-sm text-red-600 hover:text-red-800 font-medium bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition">Cerrar Sesión</button>
+      </header>
+
+      <main class="p-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
+        
+        <!-- Formulario de Registro -->
+        <div class="bg-white rounded-xl border border-corporate-border shadow-xs overflow-hidden h-fit">
+          <div class="px-6 py-4 border-b border-corporate-border bg-slate-50">
+            <h3 class="font-bold text-slate-700">Nueva Categoría</h3>
+          </div>
+          <div class="p-6">
+            <form id="form-categorias" class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Nombre de la Categoría</label>
+                <input type="text" id="nombre-cat" required class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-corporate-primary focus:border-corporate-primary outline-none transition" placeholder="Ej. Medicinas">
+              </div>
+              <div id="mensaje-estado" class="hidden px-4 py-3 rounded-lg text-sm font-medium"></div>
+              <div class="pt-2 flex justify-end">
+                <button type="submit" id="btn-submit" class="bg-corporate-primary hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-medium transition shadow-xs">Guardar Categoría</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Tabla de Categorías -->
+        <div class="bg-white rounded-xl border border-corporate-border shadow-xs overflow-hidden">
+          <div class="px-6 py-4 border-b border-corporate-border bg-slate-50 flex justify-between items-center">
+            <h3 class="font-bold text-slate-700">Categorías Existentes</h3>
+            <button onclick="cargarCategorias()" class="text-sm text-corporate-primary hover:underline font-medium">Actualizar</button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-corporate-border">
+                  <th class="px-6 py-3 font-semibold">ID</th>
+                  <th class="px-6 py-3 font-semibold">Nombre</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-corporate-border text-sm text-slate-600" id="tabla-categorias">
+                <tr><td colspan="2" class="px-6 py-4 text-center text-slate-400">Cargando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <script>
+    function cerrarSesion() {
+      localStorage.clear();
+      window.location.href = 'login.html';
+    }
+
+    // Cargar la lista de categorías al iniciar
+    async function cargarCategorias() {
+      try {
+        const res = await fetch('/api/categorias', { headers: { 'Authorization': `Bearer ${token}` } });
+        const categorias = await res.json();
+        const tbody = document.getElementById('tabla-categorias');
+        
+        if (!categorias.length) {
+          tbody.innerHTML = `<tr><td colspan="2" class="px-6 py-4 text-center text-slate-400">No hay categorías.</td></tr>`;
+          return;
+        }
+        
+        tbody.innerHTML = categorias.map(cat => `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="px-6 py-3 font-medium text-slate-800">#${cat.id}</td>
+            <td class="px-6 py-3">${cat.nombre}</td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // Guardar una nueva categoría
+    document.getElementById('form-categorias').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('btn-submit');
+      const msj = document.getElementById('mensaje-estado');
+      const nombre = document.getElementById('nombre-cat').value.trim();
+
+      btn.disabled = true; btn.innerHTML = 'Guardando...'; msj.className = 'hidden';
+
+      try {
+        const res = await fetch('/api/categorias', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ nombre })
+        });
+
+        if (res.ok) {
+          msj.textContent = '✅ Categoría guardada.';
+          msj.className = 'px-4 py-3 rounded-lg text-sm font-medium bg-emerald-50 text-emerald-700 block mt-4';
+          document.getElementById('form-categorias').reset();
+          cargarCategorias(); // Recarga la tabla para mostrar la nueva
+        } else {
+          msj.textContent = '❌ Error al guardar.';
+          msj.className = 'px-4 py-3 rounded-lg text-sm font-medium bg-red-50 text-red-700 block mt-4';
+        }
+      } catch (err) {
+        msj.textContent = '❌ Error de conexión.';
+        msj.className = 'px-4 py-3 rounded-lg text-sm font-medium bg-red-50 text-red-700 block mt-4';
+      } finally {
+        btn.disabled = false; btn.innerHTML = 'Guardar Categoría';
+      }
+    });
+
+    cargarCategorias();
+  </script>
+</body>
+</html>

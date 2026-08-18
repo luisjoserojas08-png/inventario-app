@@ -153,4 +153,26 @@ app.post('/api/entradas', verificarToken, async (req, res) => {
 // Iniciar servidor local / nube
 app.listen(PORT, () => {
     console.log(`Servidor en puerto ${PORT} blindado y seguro`);
+});// 5. REGISTRAR NUEVA CATEGORÍA
+app.post('/api/categorias', verificarToken, async (req, res) => {
+    const { nombre } = req.body;
+    try {
+        const query = `INSERT INTO categorias (nombre) VALUES ($1) RETURNING *`;
+        const resultado = await pool.query(query, [nombre]);
+        res.status(201).json({ mensaje: 'Categoría registrada con éxito', categoria: resultado.rows[0] });
+    } catch (error) {
+        console.error("Error al registrar categoría:", error);
+        res.status(500).json({ error: 'No se pudo registrar la categoría' });
+    }
+});
+
+// 6. OBTENER TODAS LAS CATEGORÍAS (Para verlas en pantalla)
+app.get('/api/categorias', verificarToken, async (req, res) => {
+    try {
+        const resultado = await pool.query('SELECT * FROM categorias ORDER BY nombre ASC');
+        res.json(resultado.rows);
+    } catch (error) {
+        console.error("Error al obtener categorías:", error);
+        res.status(500).json({ error: 'Error al consultar categorías' });
+    }
 });

@@ -114,4 +114,17 @@ app.get('/api/entradas', async (req, res) => {
     console.error(error);
     res.status(500).json({ error: 'Error al obtener el historial de entradas' });
   }
+});// Ruta para registrar una nueva categoría
+app.post('/api/categorias', async (req, res) => {
+  try {
+    const { nombre } = req.body;
+    const nuevaCategoria = await pool.query(
+      `INSERT INTO categorias (nombre) VALUES ($1) RETURNING *`,
+      [nombre]
+    );
+    res.status(201).json(nuevaCategoria.rows[0]);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al registrar la categoría' });
+  }
 });

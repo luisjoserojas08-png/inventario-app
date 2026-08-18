@@ -3,7 +3,8 @@ const cors = require('cors');
 const path = require('path');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const pool = require('./config/db'); // Importa la conexión blindada con SSL
+const ExcelJS = require('exceljs'); // Librería para exportar a Excel
+const pool = require('./config/db'); // Importa la conexión a Neon
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -15,11 +16,10 @@ app.use(express.json());
 // Servir archivos estáticos desde la carpeta public
 app.use(express.static(path.join(__dirname, '../public')));
 
-// === NUEVA REGLA: Redirigir al login automáticamente al entrar a localhost:3000 ===
+// === NUEVA REGLA: Redirigir al login automáticamente ===
 app.get('/', (req, res) => {
     res.redirect('/login.html');
 });
-// =================================================================================
 
 // Middleware de autenticación por Token
 function verificarToken(req, res, next) {
@@ -113,7 +113,6 @@ app.post('/api/entradas', verificarToken, async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // Verificar si el producto ya existe o crearlo
         let prodResult = await client.query('SELECT id FROM productos WHERE sku = $1', [sku]);
         let productoId;
 
@@ -132,7 +131,6 @@ app.post('/api/entradas', verificarToken, async (req, res) => {
             );
         }
 
-        // Registrar la entrada de lote
         const entradaResult = await client.query(
             `INSERT INTO entradas (producto_id, cantidad, costo_unitario, stock_restante) 
              VALUES ($1, $2, $3, $4) RETURNING id`,
@@ -150,10 +148,7 @@ app.post('/api/entradas', verificarToken, async (req, res) => {
     }
 });
 
-// Iniciar servidor local / nube
-app.listen(PORT, () => {
-    console.log(`Servidor en puerto ${PORT} blindado y seguro`);
-});// 5. REGISTRAR NUEVA CATEGORÍA
+// 5. REGISTRAR NUEVA CATEGORÍA
 app.post('/api/categorias', verificarToken, async (req, res) => {
     const { nombre } = req.body;
     try {
@@ -175,4 +170,49 @@ app.get('/api/categorias', verificarToken, async (req, res) => {
         console.error("Error al obtener categorías:", error);
         res.status(500).json({ error: 'Error al consultar categorías' });
     }
+});
+
+// 7. DESCARGAR REPORTE DE INVENTARIO EN EXCEL
+app.get('/api/reporte-salidas', verificarToken, async (req, res) => {
+    try {
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Inventario Actual');
+
+        // Columnas
+        worksheet.columns = [
+            { header: 'SKU', key: 'sku', width: 15 },
+            { header: 'Producto', key: 'nombre', width: 30 },
+            { header: 'Categoría', key: 'categoria_nombre', width: 20 },
+            { header: 'Stock Restante', key: 'stock_restante', width: 15 },
+            { header: 'Costo Unitario ($)', key: 'costo_unitario', width: 18 }
+        ];
+
+        // Consulta
+        const query = `
+            SELECT p.sku, p.nombre, c.nombre AS categoria_nombre, 
+                   COALESCE(SUM(e.stock_restante), 0) AS stock_restante, 
+                   COALESCE(e.costo_unitario, 0) AS costo_unitario
+            FROM productos p
+            LEFT JOIN categorias c ON p.categoria_id = c.id
+            LEFT JOIN entradas e ON p.id = e.producto_id AND e.stock_restante > 0
+            GROUP BY p.id, p.sku, p.nombre, c.nombre, e.costo_unitario
+            ORDER BY p.nombre ASC;
+        `;
+        const resultado = await pool.query(query);
+        worksheet.addRows(resultado.rows);
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename="reporte_inventario.xlsx"');
+
+        await workbook.xlsx.write(res);
+        res.end();
+    } catch (error) {
+        console.error("Error al generar reporte Excel:", error);
+        res.status(500).json({ error: 'No se pudo generar el reporte en Excel' });
+    }
+});
+
+// === INICIAR SERVIDOR === (SIEMPRE AL FINAL)
+app.listen(PORT, () => {
+    console.log(`Servidor en puerto ${PORT} blindado y seguro`);
 });

@@ -275,3 +275,34 @@ app.get('/api/reporte-salidas', verificarToken, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor en puerto ${PORT} blindado y seguro`));
+// 9. REPORTE HISTORIAL DE ENTRADAS
+app.get('/api/reporte/entradas', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT e.id, p.sku, p.nombre AS producto_nombre, e.cantidad, e.costo_unitario, e.stock_restante, e.fecha
+            FROM entradas e
+            JOIN productos p ON e.producto_id = p.id
+            ORDER BY e.fecha DESC;
+        `;
+        const resultado = await pool.query(query);
+        res.json(resultado.rows);
+    } catch (error) {
+        res.status(500).json({ error: 'Error al consultar el historial de entradas' });
+    }
+});
+
+// 10. REPORTE HISTORIAL DE SALIDAS
+app.get('/api/reporte/salidas', verificarToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT s.id, p.sku, p.nombre AS producto_nombre, s.cantidad, s.concepto, s.fecha
+            FROM salidas s
+            JOIN productos p ON s.producto_id = p.id
+            ORDER BY s.fecha DESC;
+        `;
+        const resultado = await pool.query(query);
+        res.json(resultado.rows);
+    } catch (error) {
+        res.status(500).json({ error: 'Error al consultar el historial de salidas' });
+    }
+});

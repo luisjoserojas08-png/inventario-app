@@ -16,6 +16,7 @@ app.use(express.static(path.join(__dirname, '../public')));
 
 app.get('/', (req, res) => res.redirect('/login.html'));
 
+// Middleware de autenticación por Token
 function verificarToken(req, res, next) {
     const authHeader = req.headers['authorization'];
     if (!authHeader) return res.status(401).json({ error: 'Token requerido' });
@@ -29,8 +30,18 @@ function verificarToken(req, res, next) {
     });
 }
 
-// 1. REGISTRO
-app.post('/api/usuarios', async (req, res) => {
+// Middleware de control de roles (RBAC)
+function verificarRol(rolesPermitidos) {
+    return (req, res, next) => {
+        if (!req.user || !rolesPermitidos.includes(req.user.rol)) {
+            return res.status(403).json({ error: 'Acceso denegado: No tienes permisos suficientes.' });
+        }
+        next();
+    };
+}
+
+// 1. REGISTRO (Solo Admin)
+app.post('/api/usuarios', verificarToken, verificarRol(['Administrador']), async (req, res) => {
     const { nombre, correo, password, rol } = req.body;
     try {
         const hashedPassword = await bcrypt.hash(password, 10);
@@ -80,15 +91,14 @@ app.get('/api/inventario-lotes', verificarToken, async (req, res) => {
     }
 });
 
-// 4. CREAR PRODUCTO (MAESTRO)
-app.post('/api/productos', verificarToken, async (req, res) => {
+// 4. CREAR PRODUCTO
+app.post('/api/productos', verificarToken, verificarRol(['Administrador', 'Supervisor']), async (req, res) => {
     const { sku, nombre, categoria_id } = req.body;
     try {
         const query = `INSERT INTO productos (sku, nombre, categoria_id, stock_actual, stock_minimo, precio_costo) VALUES ($1, $2, $3, 0, 5, 0) RETURNING *`;
         const resultado = await pool.query(query, [sku, nombre, categoria_id || 1]);
         res.status(201).json({ mensaje: 'Producto creado', producto: resultado.rows[0] });
     } catch (error) {
-        // Validación estricta de SKU repetido (Código de Postgres para duplicados)
         if (error.code === '23505') {
             return res.status(400).json({ error: 'El código SKU ya está registrado en otro producto.' });
         }
@@ -106,8 +116,8 @@ app.get('/api/productos', verificarToken, async (req, res) => {
     }
 });
 
-// 6. REGISTRAR LOTE (ENTRADA)
-app.post('/api/entradas', verificarToken, async (req, res) => {
+// 6. REGISTRAR LOTE
+app.post('/api/entradas', verificarToken, verificarRol(['Administrador', 'Supervisor']), async (req, res) => {
     const { producto_id, cantidad, costo_unitario } = req.body;
     const client = await pool.connect();
     try {
@@ -134,7 +144,7 @@ app.post('/api/entradas', verificarToken, async (req, res) => {
 });
 
 // 7. CATEGORÍAS
-app.post('/api/categorias', verificarToken, async (req, res) => {
+app.post('/api/categorias', verificarToken, verificarRol(['Administrador']), async (req, res) => {
     const { nombre } = req.body;
     try {
         const resultado = await pool.query(`INSERT INTO categorias (nombre) VALUES ($1) RETURNING *`, [nombre]);

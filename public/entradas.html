@@ -3,123 +3,185 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CM303 - Registro de Compras y Entradas</title>
+    <title>ERP - Módulo de Entradas (CM303)</title>
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
         theme: {
           extend: {
             colors: {
-              corporate: { dark: '#0f172a', primary: '#1e40af', light: '#f8fafc', border: '#e2e8f0' }
+              corporate: {
+                dark: '#0f172a',
+                primary: '#1e40af',
+                light: '#f8fafc',
+                border: '#e2e8f0'
+              }
             }
           }
         }
       }
     </script>
 </head>
-<body class="bg-corporate-light font-sans text-slate-800">
+<body class="bg-corporate-light font-sans text-slate-800 subpixel-antialiased">
 
+  <!-- Validación blindada del token al cargar la página -->
   <script>
     const token = localStorage.getItem('erp_token') || localStorage.getItem('token');
-    if (!token) { window.location.href = 'login.html'; }
+    if (!token) {
+        window.location.href = 'login.html';
+    }
   </script>
 
   <div class="flex h-screen overflow-hidden">
     
-    <!-- Sidebar -->
+    <!-- Barra Lateral (Sidebar) -->
     <aside class="w-64 bg-corporate-dark text-slate-300 flex flex-col hidden md:flex">
-      <div class="p-6 text-xl font-bold text-white tracking-wider border-b border-slate-800">
-        ERP Genética
+      <div class="p-6 text-xl font-bold text-white tracking-wider border-b border-slate-800 flex items-center space-x-2">
+        <span>ERP Genética</span>
       </div>
       <nav class="flex-1 p-4 space-y-2">
         <a href="index.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition">📊 Dashboard Inventario</a>
-        <a href="entradas.html" class="block px-4 py-2.5 rounded-lg bg-corporate-primary text-white font-medium transition shadow-xs">📥 Registro de Compras (Entradas)</a>
+        <a href="entradas.html" class="block px-4 py-2.5 rounded-lg bg-corporate-primary text-white font-medium transition shadow-xs">📥 Registro de Compras</a>
         <a href="/api/reporte-salidas" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition">📑 Descargar Reporte Excel</a>
       </nav>
+      <div class="p-4 border-t border-slate-800 text-xs text-slate-500">
+        Sesión Activa • Neon DB
+      </div>
     </aside>
 
-    <!-- Contenido -->
+    <!-- Contenido Principal -->
     <div class="flex-1 flex flex-col overflow-y-auto">
+      
+      <!-- Cabecera -->
       <header class="bg-white border-b border-corporate-border h-16 flex items-center justify-between px-8 shadow-xs">
-        <h1 class="text-lg font-semibold text-slate-700">CM303 - Registro de Compras y Entradas de Inventario</h1>
+        <h1 class="text-lg font-semibold text-slate-700">Módulo de Entradas (Formato CM303)</h1>
         <div class="flex items-center space-x-4">
-          <span class="text-xs bg-blue-50 text-blue-700 font-bold px-3 py-1 rounded-full border border-blue-200">Tasa de Cambio: 830.00 VEB</span>
+          <button onclick="cerrarSesion()" class="text-sm text-red-600 hover:text-red-800 font-medium bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition">Cerrar Sesión</button>
         </div>
       </header>
 
+      <!-- Cuerpo -->
       <main class="p-8">
-        <!-- Formulario de Entrada estilo iERP -->
-        <div class="bg-white rounded-xl border border-corporate-border shadow-xs p-6 mb-8">
-          <h3 class="font-bold text-slate-700 mb-4 pb-2 border-b border-slate-100 flex items-center justify-between">
-            <span>➕ Registrar Nueva Entrada de Stock</span>
-          </h3>
+        
+        <div class="max-w-2xl bg-white rounded-xl border border-corporate-border shadow-xs overflow-hidden">
+          <div class="px-6 py-4 border-b border-corporate-border bg-slate-50">
+            <h3 class="font-bold text-slate-700">Registrar Nuevo Lote de Inventario</h3>
+            <p class="text-sm text-slate-500 mt-1">Ingresa los datos de la factura de compra o entrada de almacén.</p>
+          </div>
+          
+          <div class="p-6">
+            <form id="form-entradas" class="space-y-6">
+              
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- SKU -->
+                <div>
+                  <label class="block text-sm font-medium text-slate-700 mb-1">Código SKU</label>
+                  <input type="text" id="sku" required class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-corporate-primary focus:border-corporate-primary outline-none transition" placeholder="Ej. IN-001">
+                </div>
+                
+                <!-- Nombre del Producto -->
+                <div>
+                  <label class="block text-sm font-medium text-slate-700 mb-1">Nombre del Producto</label>
+                  <input type="text" id="nombre" required class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-corporate-primary focus:border-corporate-primary outline-none transition" placeholder="Ej. Alimento para Camarón">
+                </div>
+              </div>
 
-          <form id="formEntrada" class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label class="block text-xs font-bold text-slate-400 uppercase mb-1">SKU del Producto</label>
-              <input type="text" id="sku" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-blue-600" required placeholder="Ej. SKU-001">
-            </div>
-            <div>
-              <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Nombre del Producto</label>
-              <input type="text" id="nombre" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-blue-600" required placeholder="Ej. Insumo de Producción">
-            </div>
-            <div>
-              <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Categoría ID</label>
-              <input type="number" id="categoria_id" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-blue-600" value="1" required>
-            </div>
-            <div>
-              <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Cantidad a Ingresar</label>
-              <input type="number" id="cantidad" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-blue-600" required placeholder="100">
-            </div>
-            <div>
-              <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Costo Unitario (USD)</label>
-              <input type="number" step="0.01" id="costo_unitario" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-blue-600" required placeholder="12.50">
-            </div>
-            <div class="flex items-end">
-              <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg text-sm transition shadow-sm">
-                Registrar Lote
-              </button>
-            </div>
-          </form>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Cantidad -->
+                <div>
+                  <label class="block text-sm font-medium text-slate-700 mb-1">Cantidad Entrante</label>
+                  <input type="number" id="cantidad" required min="1" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-corporate-primary focus:border-corporate-primary outline-none transition" placeholder="0">
+                </div>
+                
+                <!-- Costo Unitario -->
+                <div>
+                  <label class="block text-sm font-medium text-slate-700 mb-1">Costo Unitario ($)</label>
+                  <input type="number" id="costo_unitario" required min="0.01" step="0.01" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-corporate-primary focus:border-corporate-primary outline-none transition" placeholder="0.00">
+                </div>
+              </div>
+
+              <!-- Mensaje de estado -->
+              <div id="mensaje-estado" class="hidden px-4 py-3 rounded-lg text-sm font-medium"></div>
+
+              <div class="pt-4 flex justify-end">
+                <button type="submit" id="btn-submit" class="bg-corporate-primary hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-medium transition shadow-xs flex items-center">
+                  Registrar Lote
+                </button>
+              </div>
+
+            </form>
+          </div>
         </div>
 
-        <!-- Historial o Nota Informativa -->
-        <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
-          ℹ️ **Nota de Control:** Cada entrada procesada actualiza de forma automática el stock mediante el método FIFO y recalcula los costos de inventario de acuerdo con las políticas contables de la empresa.
-        </div>
       </main>
     </div>
   </div>
 
   <script>
-    document.getElementById('formEntrada').onsubmit = async (e) => {
-      e.preventDefault();
-      const payload = {
-        sku: document.getElementById('sku').value,
-        nombre: document.getElementById('nombre').value,
-        categoria_id: Number(document.getElementById('categoria_id').value),
-        cantidad: Number(document.getElementById('cantidad').value),
-        costo_unitario: Number(document.getElementById('costo_unitario').value)
-      };
+    function cerrarSesion() {
+      localStorage.removeItem('erp_token');
+      localStorage.removeItem('token');
+      localStorage.removeItem('erp_usuario');
+      window.location.href = 'login.html';
+    }
+
+    // Lógica principal para enviar el formulario a Render/Neon
+    document.getElementById('form-entradas').addEventListener('submit', async (e) => {
+      e.preventDefault(); // ¡VITAL! Evita que la página se recargue y rompa el proceso
+
+      const btnSubmit = document.getElementById('btn-submit');
+      const mensajeDiv = document.getElementById('mensaje-estado');
+      
+      // Capturar los valores
+      const sku = document.getElementById('sku').value.trim();
+      const nombre = document.getElementById('nombre').value.trim();
+      const cantidad = parseInt(document.getElementById('cantidad').value, 10);
+      const costo_unitario = parseFloat(document.getElementById('costo_unitario').value);
+
+      // Deshabilitar botón mientras carga
+      btnSubmit.disabled = true;
+      btnSubmit.innerHTML = 'Procesando...';
+      mensajeDiv.className = 'hidden';
 
       try {
-        const res = await fetch('/api/entradas', {
+        const respuesta = await fetch('/api/entradas', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify(payload)
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}` // Autenticación blindada
+          },
+          body: JSON.stringify({
+            sku,
+            nombre,
+            categoria_id: 1, // Por defecto para evitar errores de llave foránea
+            cantidad,
+            costo_unitario
+          })
         });
-        const data = await res.json();
-        if (res.ok) {
-          alert('✅ Lote de entrada registrado con éxito.');
-          document.getElementById('formEntrada').reset();
+
+        const data = await respuesta.json();
+
+        if (respuesta.ok) {
+          // Éxito: Mostrar mensaje verde y limpiar formulario
+          mensajeDiv.textContent = '✅ Lote registrado exitosamente. Ya puedes verlo en el Dashboard.';
+          mensajeDiv.className = 'px-4 py-3 rounded-lg text-sm font-medium bg-emerald-50 text-emerald-700 block';
+          document.getElementById('form-entradas').reset();
         } else {
-          alert('❌ Error: ' + (data.error || 'No se pudo procesar la entrada'));
+          // Error del backend
+          mensajeDiv.textContent = '❌ Error: ' + (data.error || 'No se pudo registrar');
+          mensajeDiv.className = 'px-4 py-3 rounded-lg text-sm font-medium bg-red-50 text-red-700 block';
         }
-      } catch (err) {
-        console.error(err);
-        alert('Error de conexión');
+      } catch (error) {
+        // Error de red
+        mensajeDiv.textContent = '❌ Error de conexión con el servidor.';
+        mensajeDiv.className = 'px-4 py-3 rounded-lg text-sm font-medium bg-red-50 text-red-700 block';
+      } finally {
+        // Restaurar botón
+        btnSubmit.disabled = false;
+        btnSubmit.innerHTML = 'Registrar Lote';
       }
-    };
+    });
   </script>
 </body>
 </html>

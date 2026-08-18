@@ -163,7 +163,7 @@ app.get('/api/productos', verificarToken, async (req, res) => {
     }
 });
 
-// 6. REGISTRAR LOTE
+// 6. REGISTRAR LOTE (ENTRADAS)
 app.post('/api/entradas', verificarToken, verificarRol(['Administrador', 'Supervisor']), async (req, res) => {
     const { producto_id, cantidad, costo_unitario } = req.body;
     const client = await pool.connect();
@@ -185,6 +185,38 @@ app.post('/api/entradas', verificarToken, verificarRol(['Administrador', 'Superv
     } catch (error) {
         await client.query('ROLLBACK');
         res.status(500).json({ error: 'Error al procesar la entrada' });
+    } finally {
+        client.release();
+    }
+});
+
+// 6.1 REGISTRAR SALIDAS
+app.post('/api/salidas', verificarToken, verificarRol(['Administrador', 'Supervisor']), async (req, res) => {
+    const { producto_id, cantidad, concepto } = req.body;
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        
+        const prod = await client.query('SELECT stock_actual FROM productos WHERE id = $1 FOR UPDATE', [producto_id]);
+        if (prod.rows[0].stock_actual < cantidad) {
+            throw new Error('Stock insuficiente para realizar esta salida');
+        }
+
+        await client.query(
+            `INSERT INTO salidas (producto_id, cantidad, concepto, fecha) VALUES ($1, $2, $3, NOW())`,
+            [producto_id, cantidad, concepto]
+        );
+
+        await client.query(
+            `UPDATE productos SET stock_actual = stock_actual - $1 WHERE id = $2`,
+            [cantidad, producto_id]
+        );
+
+        await client.query('COMMIT');
+        res.status(201).json({ mensaje: 'Salida registrada correctamente' });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        res.status(400).json({ error: error.message || 'Error al procesar salida' });
     } finally {
         client.release();
     }

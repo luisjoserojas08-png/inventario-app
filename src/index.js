@@ -20,7 +20,6 @@ app.use(express.static('public'));
 
 // 1. Candado de Seguridad (Middleware)
 const verificarToken = (req, res, next) => {
-    // Busca el token en los encabezados de la petición
     const token = req.headers['authorization'];
     
     if (!token) {
@@ -28,22 +27,22 @@ const verificarToken = (req, res, next) => {
     }
 
     try {
-        // Quita la palabra "Bearer " si viene en el texto
         const tokenLimpio = token.split(" ")[1] || token;
         const decodificado = jwt.verify(tokenLimpio, JWT_SECRET);
-        req.usuario = decodificado; // Guarda los datos del usuario para usarlos en la ruta
-        next(); // Deja pasar la petición
+        req.usuario = decodificado;
+        next();
     } catch (error) {
         return res.status(401).json({ error: 'Token inválido o expirado. Por favor inicia sesión de nuevo.' });
     }
 };
 
-// 2. Ruta para Crear un Usuario (Registro)
+// 2. Ruta para Crear un Usuario (Registro) con Logs Detallados
 app.post('/api/usuarios', async (req, res) => {
     try {
         const { nombre, correo, password, rol } = req.body;
+        
+        console.log("Intentando registrar usuario:", correo);
 
-        // Encriptar la contraseña (10 rondas de seguridad)
         const salt = await bcrypt.genSalt(10);
         const passwordEncriptada = await bcrypt.hash(password, salt);
 
@@ -54,8 +53,8 @@ app.post('/api/usuarios', async (req, res) => {
 
         res.status(201).json({ mensaje: 'Usuario creado con éxito', usuario: nuevoUsuario.rows[0] });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Error al registrar el usuario. Es posible que el correo ya exista.' });
+        console.error("ERROR DETALLADO DE REGISTRO:", error);
+        res.status(500).json({ error: error.message }); 
     }
 });
 
@@ -64,7 +63,6 @@ app.post('/api/login', async (req, res) => {
     try {
         const { correo, password } = req.body;
 
-        // Buscar al usuario por su correo
         const userRes = await pool.query('SELECT * FROM usuarios WHERE correo = $1', [correo]);
         if (userRes.rows.length === 0) {
             return res.status(400).json({ error: 'Correo o contraseña incorrectos' });
@@ -72,32 +70,27 @@ app.post('/api/login', async (req, res) => {
 
         const usuario = userRes.rows[0];
 
-        // Comparar la contraseña enviada con la encriptada en la base de datos
         const passwordValida = await bcrypt.compare(password, usuario.password);
         if (!passwordValida) {
             return res.status(400).json({ error: 'Correo o contraseña incorrectos' });
         }
 
-        // Crear el Token (Gafete virtual)
         const token = jwt.sign(
             { id: usuario.id, nombre: usuario.nombre, rol: usuario.rol }, 
             JWT_SECRET, 
-            { expiresIn: '8h' } // Expira en 8 horas por seguridad
+            { expiresIn: '8h' }
         );
 
         res.json({ mensaje: 'Bienvenido', token, usuario: { nombre: usuario.nombre, rol: usuario.rol } });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Error al intentar iniciar sesión' });
+        console.error("ERROR EN LOGIN:", error);
+        res.status(500).json({ error: error.message });
     }
 });
 
 // ==========================================
-// RUTAS DEL ERP (Ahora protegidas con "verificarToken")
+// RUTAS DEL ERP (Protegidas y Funcionales)
 // ==========================================
-
-// Para proteger una ruta, solo agregamos "verificarToken" antes de la función (req, res).
-// Aquí protegí la creación de categorías como ejemplo.
 
 app.get('/api/categorias', async (req, res) => {
   try {
@@ -211,7 +204,6 @@ app.post('/api/salidas', verificarToken, async (req, res) => {
 });
 
 app.get('/api/reporte-salidas', async (req, res) => {
-  // Aquí mantengo libre el reporte para que puedas probar la descarga, pero luego podemos protegerlo.
   try {
     const query = `SELECT s.id, p.sku, p.nombre, s.cantidad, s.motivo, s.fecha FROM salidas s JOIN productos p ON s.producto_id = p.id ORDER BY s.fecha DESC`;
     const resultado = await pool.query(query);

@@ -3,39 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ERP - Módulo de Entradas (CM303)</title>
-    <!-- Tailwind CSS CDN -->
+    <title>ERP - Entradas y Productos</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            colors: {
-              corporate: {
-                dark: '#0f172a',
-                primary: '#1e40af',
-                light: '#f8fafc',
-                border: '#e2e8f0'
-              }
-            }
-          }
-        }
-      }
+      tailwind.config = { theme: { extend: { colors: { corporate: { dark: '#0f172a', primary: '#1e40af', light: '#f8fafc', border: '#e2e8f0' } } } } }
     </script>
 </head>
 <body class="bg-corporate-light font-sans text-slate-800 subpixel-antialiased">
 
-  <!-- Validación blindada del token al cargar la página -->
   <script>
     const token = localStorage.getItem('erp_token') || localStorage.getItem('token');
-    if (!token) {
-        window.location.href = 'login.html';
-    }
+    if (!token) window.location.href = 'login.html';
   </script>
 
   <div class="flex h-screen overflow-hidden">
-    
-    <!-- Barra Lateral (Sidebar) -->
+    <!-- Sidebar -->
     <aside class="w-64 bg-corporate-dark text-slate-300 flex flex-col hidden md:flex">
       <div class="p-6 text-xl font-bold text-white tracking-wider border-b border-slate-800 flex items-center space-x-2">
         <span>ERP Genética</span>
@@ -44,74 +26,80 @@
         <a href="index.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition">📊 Dashboard Inventario</a>
         <a href="entradas.html" class="block px-4 py-2.5 rounded-lg bg-corporate-primary text-white font-medium transition shadow-xs">📥 Registro de Compras</a>
         <a href="categorias.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition">🏷️ Categorías</a>
-        <!-- BOTÓN DE EXCEL CORREGIDO -->
         <button onclick="descargarReporte()" class="w-full text-left block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition">📑 Descargar Reporte Excel</button>
       </nav>
-      <div class="p-4 border-t border-slate-800 text-xs text-slate-500">
-        Sesión Activa • Neon DB
-      </div>
+      <div class="p-4 border-t border-slate-800 text-xs text-slate-500">Sesión Activa • Neon DB</div>
     </aside>
 
-    <!-- Contenido Principal -->
+    <!-- Contenido -->
     <div class="flex-1 flex flex-col overflow-y-auto">
-      
-      <!-- Cabecera -->
       <header class="bg-white border-b border-corporate-border h-16 flex items-center justify-between px-8 shadow-xs">
-        <h1 class="text-lg font-semibold text-slate-700">Módulo de Entradas (Formato CM303)</h1>
-        <div class="flex items-center space-x-4">
-          <button onclick="cerrarSesion()" class="text-sm text-red-600 hover:text-red-800 font-medium bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition">Cerrar Sesión</button>
-        </div>
+        <h1 class="text-lg font-semibold text-slate-700">Módulo de Entradas y Maestro de Artículos</h1>
+        <button onclick="cerrarSesion()" class="text-sm text-red-600 hover:text-red-800 font-medium bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition">Cerrar Sesión</button>
       </header>
 
-      <!-- Cuerpo -->
-      <main class="p-8">
+      <main class="p-8 grid grid-cols-1 xl:grid-cols-2 gap-8">
         
-        <div class="max-w-2xl bg-white rounded-xl border border-corporate-border shadow-xs overflow-hidden">
+        <!-- PANEL 1: CREAR PRODUCTO -->
+        <div class="bg-white rounded-xl border border-corporate-border shadow-xs overflow-hidden h-fit">
           <div class="px-6 py-4 border-b border-corporate-border bg-slate-50">
-            <h3 class="font-bold text-slate-700">Registrar Nuevo Lote de Inventario</h3>
-            <p class="text-sm text-slate-500 mt-1">Ingresa los datos de la factura de compra o entrada de almacén.</p>
+            <h3 class="font-bold text-slate-700">1. Crear Nuevo Producto</h3>
+            <p class="text-xs text-slate-500 mt-1">Registra el artículo en el sistema antes de darle entrada.</p>
           </div>
-          
           <div class="p-6">
-            <form id="form-entradas" class="space-y-6">
-              
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- SKU -->
+            <form id="form-producto" class="space-y-4">
+              <div class="grid grid-cols-2 gap-4">
                 <div>
                   <label class="block text-sm font-medium text-slate-700 mb-1">Código SKU</label>
-                  <input type="text" id="sku" required class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-corporate-primary focus:border-corporate-primary outline-none transition" placeholder="Ej. IN-001">
+                  <input type="text" id="prod-sku" required class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-corporate-primary" placeholder="IN-001">
                 </div>
-                
-                <!-- Nombre del Producto -->
                 <div>
-                  <label class="block text-sm font-medium text-slate-700 mb-1">Nombre del Producto</label>
-                  <input type="text" id="nombre" required class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-corporate-primary focus:border-corporate-primary outline-none transition" placeholder="Ej. Alimento para Camarón">
+                  <label class="block text-sm font-medium text-slate-700 mb-1">Categoría</label>
+                  <select id="prod-categoria" class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none bg-white focus:ring-2 focus:ring-corporate-primary">
+                    <option value="">Cargando...</option>
+                  </select>
                 </div>
               </div>
+              <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Nombre del Producto</label>
+                <input type="text" id="prod-nombre" required class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-corporate-primary" placeholder="Ej. Alimento Premium">
+              </div>
+              <div id="msj-prod" class="hidden px-4 py-3 rounded-lg text-sm font-medium"></div>
+              <div class="pt-2 flex justify-end">
+                <button type="submit" id="btn-prod" class="bg-slate-800 hover:bg-slate-900 text-white px-6 py-2 rounded-lg font-medium transition shadow-xs">Guardar Producto</button>
+              </div>
+            </form>
+          </div>
+        </div>
 
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- Cantidad -->
+        <!-- PANEL 2: REGISTRAR LOTE -->
+        <div class="bg-white rounded-xl border border-corporate-border shadow-xs overflow-hidden h-fit">
+          <div class="px-6 py-4 border-b border-corporate-border bg-slate-50">
+            <h3 class="font-bold text-slate-700">2. Ingresar Lote de Compra (CM303)</h3>
+            <p class="text-xs text-slate-500 mt-1">Selecciona un producto existente para cargar stock y costo.</p>
+          </div>
+          <div class="p-6">
+            <form id="form-entrada" class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Seleccionar Producto</label>
+                <select id="ent-producto" required class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none bg-white focus:ring-2 focus:ring-corporate-primary">
+                  <option value="">Cargando...</option>
+                </select>
+              </div>
+              <div class="grid grid-cols-2 gap-4">
                 <div>
                   <label class="block text-sm font-medium text-slate-700 mb-1">Cantidad Entrante</label>
-                  <input type="number" id="cantidad" required min="1" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-corporate-primary focus:border-corporate-primary outline-none transition" placeholder="0">
+                  <input type="number" id="ent-cantidad" required min="1" class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-corporate-primary" placeholder="0">
                 </div>
-                
-                <!-- Costo Unitario -->
                 <div>
                   <label class="block text-sm font-medium text-slate-700 mb-1">Costo Unitario ($)</label>
-                  <input type="number" id="costo_unitario" required min="0.01" step="0.01" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-corporate-primary focus:border-corporate-primary outline-none transition" placeholder="0.00">
+                  <input type="number" id="ent-costo" required min="0.01" step="0.01" class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-corporate-primary" placeholder="0.00">
                 </div>
               </div>
-
-              <!-- Mensaje de estado -->
-              <div id="mensaje-estado" class="hidden px-4 py-3 rounded-lg text-sm font-medium"></div>
-
-              <div class="pt-4 flex justify-end">
-                <button type="submit" id="btn-submit" class="bg-corporate-primary hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-medium transition shadow-xs flex items-center">
-                  Registrar Lote
-                </button>
+              <div id="msj-ent" class="hidden px-4 py-3 rounded-lg text-sm font-medium"></div>
+              <div class="pt-2 flex justify-end">
+                <button type="submit" id="btn-ent" class="bg-corporate-primary hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition shadow-xs">Registrar Lote</button>
               </div>
-
             </form>
           </div>
         </div>
@@ -120,96 +108,104 @@
     </div>
   </div>
 
-  <!-- Scripts -->
   <script>
-    // 1. Función para descargar el reporte de Excel
     async function descargarReporte() {
         try {
-            const res = await fetch('/api/reporte-salidas', {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
-
-            if (!res.ok) {
-                alert("Error: Tu sesión expiró o no tienes permisos.");
-                return;
-            }
-
+            const res = await fetch('/api/reporte-salidas', { headers: { 'Authorization': `Bearer ${token}` } });
+            if (!res.ok) return alert("Error: Tu sesión expiró o no tienes permisos.");
             const blob = await res.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url;
-            a.download = 'reporte_inventario.xlsx';
-            document.body.appendChild(a);
-            a.click();
+            a.href = url; a.download = 'reporte_inventario.xlsx'; document.body.appendChild(a); a.click();
+            a.remove(); window.URL.revokeObjectURL(url);
+        } catch (error) { alert("Error al descargar el Excel."); }
+    }
+    function cerrarSesion() { localStorage.clear(); window.location.href = 'login.html'; }
 
-            a.remove();
-            window.URL.revokeObjectURL(url);
-        } catch (error) {
-            console.error("Error al descargar:", error);
-            alert("Hubo un error al intentar descargar el Excel.");
-        }
+    // CARGAR DESPLEGABLES
+    async function cargarCombos() {
+      try {
+        // Categorías
+        const resCat = await fetch('/api/categorias', { headers: { 'Authorization': `Bearer ${token}` }});
+        const categorias = await resCat.json();
+        const selCat = document.getElementById('prod-categoria');
+        selCat.innerHTML = '<option value="">Seleccione una categoría</option>' + 
+          categorias.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
+
+        // Productos
+        const resProd = await fetch('/api/productos', { headers: { 'Authorization': `Bearer ${token}` }});
+        const productos = await resProd.json();
+        const selProd = document.getElementById('ent-producto');
+        selProd.innerHTML = '<option value="">Seleccione un producto</option>' + 
+          productos.map(p => `<option value="${p.id}">[${p.sku}] ${p.nombre}</option>`).join('');
+      } catch (e) { console.error("Error cargando listas", e); }
     }
 
-    // 2. Función para cerrar sesión
-    function cerrarSesion() {
-      localStorage.removeItem('erp_token');
-      localStorage.removeItem('token');
-      localStorage.removeItem('erp_usuario');
-      window.location.href = 'login.html';
-    }
-
-    // 3. Lógica principal para enviar el formulario
-    document.getElementById('form-entradas').addEventListener('submit', async (e) => {
-      e.preventDefault(); 
-
-      const btnSubmit = document.getElementById('btn-submit');
-      const mensajeDiv = document.getElementById('mensaje-estado');
-      
-      const sku = document.getElementById('sku').value.trim();
-      const nombre = document.getElementById('nombre').value.trim();
-      const cantidad = parseInt(document.getElementById('cantidad').value, 10);
-      const costo_unitario = parseFloat(document.getElementById('costo_unitario').value);
-
-      btnSubmit.disabled = true;
-      btnSubmit.innerHTML = 'Procesando...';
-      mensajeDiv.className = 'hidden';
+    // ENVIAR FORMULARIO DE PRODUCTO
+    document.getElementById('form-producto').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('btn-prod'); const msj = document.getElementById('msj-prod');
+      btn.disabled = true; btn.innerHTML = 'Guardando...'; msj.className = 'hidden';
 
       try {
-        const respuesta = await fetch('/api/entradas', {
+        const res = await fetch('/api/productos', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}` 
-          },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
           body: JSON.stringify({
-            sku,
-            nombre,
-            categoria_id: 1, 
-            cantidad,
-            costo_unitario
+            sku: document.getElementById('prod-sku').value.trim(),
+            nombre: document.getElementById('prod-nombre').value.trim(),
+            categoria_id: document.getElementById('prod-categoria').value
           })
         });
+        const data = await res.json();
 
-        const data = await respuesta.json();
-
-        if (respuesta.ok) {
-          mensajeDiv.textContent = '✅ Lote registrado exitosamente. Ya puedes verlo en el Dashboard.';
-          mensajeDiv.className = 'px-4 py-3 rounded-lg text-sm font-medium bg-emerald-50 text-emerald-700 block';
-          document.getElementById('form-entradas').reset();
+        if (res.ok) {
+          msj.textContent = '✅ Producto creado en el maestro.';
+          msj.className = 'px-4 py-3 rounded-lg text-sm font-medium bg-emerald-50 text-emerald-700 block mt-4';
+          document.getElementById('form-producto').reset();
+          cargarCombos(); // Recargar la lista de la derecha para que aparezca
         } else {
-          mensajeDiv.textContent = '❌ Error: ' + (data.error || 'No se pudo registrar');
-          mensajeDiv.className = 'px-4 py-3 rounded-lg text-sm font-medium bg-red-50 text-red-700 block';
+          msj.textContent = '❌ ' + (data.error || 'Error al guardar');
+          msj.className = 'px-4 py-3 rounded-lg text-sm font-medium bg-red-50 text-red-700 block mt-4';
         }
-      } catch (error) {
-        mensajeDiv.textContent = '❌ Error de conexión con el servidor.';
-        mensajeDiv.className = 'px-4 py-3 rounded-lg text-sm font-medium bg-red-50 text-red-700 block';
-      } finally {
-        btnSubmit.disabled = false;
-        btnSubmit.innerHTML = 'Registrar Lote';
-      }
+      } catch (err) {
+        msj.textContent = '❌ Error de red.'; msj.className = 'px-4 py-3 rounded-lg text-sm font-medium bg-red-50 text-red-700 block mt-4';
+      } finally { btn.disabled = false; btn.innerHTML = 'Guardar Producto'; }
     });
+
+    // ENVIAR FORMULARIO DE LOTE
+    document.getElementById('form-entrada').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('btn-ent'); const msj = document.getElementById('msj-ent');
+      btn.disabled = true; btn.innerHTML = 'Registrando...'; msj.className = 'hidden';
+
+      try {
+        const res = await fetch('/api/entradas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({
+            producto_id: document.getElementById('ent-producto').value,
+            cantidad: parseInt(document.getElementById('ent-cantidad').value, 10),
+            costo_unitario: parseFloat(document.getElementById('ent-costo').value)
+          })
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          msj.textContent = '✅ Lote ingresado. Revisa el Dashboard.';
+          msj.className = 'px-4 py-3 rounded-lg text-sm font-medium bg-blue-50 text-blue-700 block mt-4';
+          document.getElementById('form-entrada').reset();
+        } else {
+          msj.textContent = '❌ ' + (data.error || 'Error al registrar lote');
+          msj.className = 'px-4 py-3 rounded-lg text-sm font-medium bg-red-50 text-red-700 block mt-4';
+        }
+      } catch (err) {
+        msj.textContent = '❌ Error de red.'; msj.className = 'px-4 py-3 rounded-lg text-sm font-medium bg-red-50 text-red-700 block mt-4';
+      } finally { btn.disabled = false; btn.innerHTML = 'Registrar Lote'; }
+    });
+
+    // Inicializar listas al cargar la página
+    cargarCombos();
   </script>
 </body>
 </html>

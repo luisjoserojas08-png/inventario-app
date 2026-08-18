@@ -3,8 +3,8 @@ const cors = require('cors');
 const path = require('path');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const ExcelJS = require('exceljs'); // Librería para exportar a Excel
-const pool = require('./config/db'); // Importa la conexión a Neon
+const ExcelJS = require('exceljs');
+const pool = require('./config/db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -12,20 +12,13 @@ const JWT_SECRET = process.env.JWT_SECRET || 'secreto_super_seguro';
 
 app.use(cors());
 app.use(express.json());
-
-// Servir archivos estáticos desde la carpeta public
 app.use(express.static(path.join(__dirname, '../public')));
 
-// === NUEVA REGLA: Redirigir al login automáticamente ===
-app.get('/', (req, res) => {
-    res.redirect('/login.html');
-});
+app.get('/', (req, res) => res.redirect('/login.html'));
 
-// Middleware de autenticación por Token
 function verificarToken(req, res, next) {
     const authHeader = req.headers['authorization'];
     if (!authHeader) return res.status(401).json({ error: 'Token requerido' });
-    
     const token = authHeader.split(' ')[1];
     if (!token) return res.status(401).json({ error: 'Formato de token inválido' });
 
@@ -36,55 +29,38 @@ function verificarToken(req, res, next) {
     });
 }
 
-// 1. REGISTRO DE USUARIOS
+// 1. REGISTRO
 app.post('/api/usuarios', async (req, res) => {
     const { nombre, correo, password, rol } = req.body;
     try {
         const hashedPassword = await bcrypt.hash(password, 10);
         const query = `INSERT INTO usuarios (nombre, correo, password, rol) VALUES ($1, $2, $3, $4) RETURNING id, nombre, correo, rol`;
-        const values = [nombre, correo, hashedPassword, rol || 'Administrador'];
-        const nuevoUsuario = await pool.query(query, values);
-        
+        const nuevoUsuario = await pool.query(query, [nombre, correo, hashedPassword, rol || 'Administrador']);
         res.status(201).json({ mensaje: 'Usuario registrado con éxito', usuario: nuevoUsuario.rows[0] });
     } catch (error) {
-        console.error("Error en registro:", error);
-        res.status(500).json({ error: 'El correo ya está registrado o hubo un error en la base de datos' });
+        res.status(500).json({ error: 'El correo ya está registrado o hubo un error' });
     }
 });
 
-// 2. LOGIN DE USUARIOS
+// 2. LOGIN
 app.post('/api/login', async (req, res) => {
     const { correo, password } = req.body;
     try {
         const resultado = await pool.query('SELECT * FROM usuarios WHERE correo = $1', [correo]);
-        if (resultado.rows.length === 0) {
-            return res.status(400).json({ error: 'Credenciales incorrectas' });
-        }
+        if (resultado.rows.length === 0) return res.status(400).json({ error: 'Credenciales incorrectas' });
 
         const usuario = resultado.rows[0];
         const passwordValido = await bcrypt.compare(password, usuario.password);
-        if (!passwordValido) {
-            return res.status(400).json({ error: 'Credenciales incorrectas' });
-        }
+        if (!passwordValido) return res.status(400).json({ error: 'Credenciales incorrectas' });
 
         const token = jwt.sign({ id: usuario.id, correo: usuario.correo, rol: usuario.rol }, JWT_SECRET, { expiresIn: '8h' });
-        
-        res.json({
-            token,
-            usuario: {
-                id: usuario.id,
-                nombre: usuario.nombre,
-                correo: usuario.correo,
-                rol: usuario.rol
-            }
-        });
+        res.json({ token, usuario: { id: usuario.id, nombre: usuario.nombre, correo: usuario.correo, rol: usuario.rol } });
     } catch (error) {
-        console.error("ERROR EN LOGIN:", error);
         res.status(500).json({ error: error.message });
     }
 });
 
-// 3. OBTENER INVENTARIO ACTUAL POR LOTES (Dashboard)
+// 3. DASHBOARD
 app.get('/api/inventario-lotes', verificarToken, async (req, res) => {
     try {
         const query = `
@@ -100,85 +76,88 @@ app.get('/api/inventario-lotes', verificarToken, async (req, res) => {
         const resultado = await pool.query(query);
         res.json(resultado.rows);
     } catch (error) {
-        console.error("Error al obtener inventario:", error);
         res.status(500).json({ error: 'Error al consultar las existencias' });
     }
 });
 
-// 4. REGISTRAR ENTRADA (Módulo de Compras tipo CM303)
+// 4. CREAR PRODUCTO (MAESTRO)
+app.post('/api/productos', verificarToken, async (req, res) => {
+    const { sku, nombre, categoria_id } = req.body;
+    try {
+        const query = `INSERT INTO productos (sku, nombre, categoria_id, stock_actual, stock_minimo, precio_costo) VALUES ($1, $2, $3, 0, 5, 0) RETURNING *`;
+        const resultado = await pool.query(query, [sku, nombre, categoria_id || 1]);
+        res.status(201).json({ mensaje: 'Producto creado', producto: resultado.rows[0] });
+    } catch (error) {
+        // Validación estricta de SKU repetido (Código de Postgres para duplicados)
+        if (error.code === '23505') {
+            return res.status(400).json({ error: 'El código SKU ya está registrado en otro producto.' });
+        }
+        res.status(500).json({ error: 'Error al crear el producto' });
+    }
+});
+
+// 5. LISTAR PRODUCTOS
+app.get('/api/productos', verificarToken, async (req, res) => {
+    try {
+        const resultado = await pool.query('SELECT id, sku, nombre FROM productos ORDER BY nombre ASC');
+        res.json(resultado.rows);
+    } catch (error) {
+        res.status(500).json({ error: 'Error al listar productos' });
+    }
+});
+
+// 6. REGISTRAR LOTE (ENTRADA)
 app.post('/api/entradas', verificarToken, async (req, res) => {
-    const { sku, nombre, categoria_id, cantidad, costo_unitario } = req.body;
-    
+    const { producto_id, cantidad, costo_unitario } = req.body;
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-
-        let prodResult = await client.query('SELECT id FROM productos WHERE sku = $1', [sku]);
-        let productoId;
-
-        if (prodResult.rows.length === 0) {
-            const nuevoProd = await client.query(
-                `INSERT INTO productos (sku, nombre, categoria_id, stock_actual, stock_minimo, precio_costo) 
-                 VALUES ($1, $2, $3, $4, 5, $5) RETURNING id`,
-                [sku, nombre, categoria_id || 1, cantidad, costo_unitario]
-            );
-            productoId = nuevoProd.rows[0].id;
-        } else {
-            productoId = prodResult.rows[0].id;
-            await client.query(
-                `UPDATE productos SET stock_actual = stock_actual + $1, precio_costo = $2 WHERE id = $3`,
-                [cantidad, costo_unitario, productoId]
-            );
-        }
+        
+        await client.query(
+            `UPDATE productos SET stock_actual = stock_actual + $1, precio_costo = $2 WHERE id = $3`,
+            [cantidad, costo_unitario, producto_id]
+        );
 
         const entradaResult = await client.query(
-            `INSERT INTO entradas (producto_id, cantidad, costo_unitario, stock_restante) 
-             VALUES ($1, $2, $3, $4) RETURNING id`,
-            [productoId, cantidad, costo_unitario, cantidad]
+            `INSERT INTO entradas (producto_id, cantidad, costo_unitario, stock_restante) VALUES ($1, $2, $3, $4) RETURNING id`,
+            [producto_id, cantidad, costo_unitario, cantidad]
         );
 
         await client.query('COMMIT');
-        res.status(201).json({ mensaje: 'Lote de entrada registrado con éxito', entradaId: entradaResult.rows[0].id });
+        res.status(201).json({ mensaje: 'Lote registrado con éxito', entradaId: entradaResult.rows[0].id });
     } catch (error) {
         await client.query('ROLLBACK');
-        console.error("Error al registrar entrada:", error);
-        res.status(500).json({ error: 'No se pudo procesar la entrada de inventario' });
+        res.status(500).json({ error: 'Error al procesar la entrada' });
     } finally {
         client.release();
     }
 });
 
-// 5. REGISTRAR NUEVA CATEGORÍA
+// 7. CATEGORÍAS
 app.post('/api/categorias', verificarToken, async (req, res) => {
     const { nombre } = req.body;
     try {
-        const query = `INSERT INTO categorias (nombre) VALUES ($1) RETURNING *`;
-        const resultado = await pool.query(query, [nombre]);
-        res.status(201).json({ mensaje: 'Categoría registrada con éxito', categoria: resultado.rows[0] });
+        const resultado = await pool.query(`INSERT INTO categorias (nombre) VALUES ($1) RETURNING *`, [nombre]);
+        res.status(201).json({ mensaje: 'Categoría registrada', categoria: resultado.rows[0] });
     } catch (error) {
-        console.error("Error al registrar categoría:", error);
-        res.status(500).json({ error: 'No se pudo registrar la categoría' });
+        res.status(500).json({ error: 'Error al registrar categoría' });
     }
 });
 
-// 6. OBTENER TODAS LAS CATEGORÍAS (Para verlas en pantalla)
 app.get('/api/categorias', verificarToken, async (req, res) => {
     try {
         const resultado = await pool.query('SELECT * FROM categorias ORDER BY nombre ASC');
         res.json(resultado.rows);
     } catch (error) {
-        console.error("Error al obtener categorías:", error);
         res.status(500).json({ error: 'Error al consultar categorías' });
     }
 });
 
-// 7. DESCARGAR REPORTE DE INVENTARIO EN EXCEL
+// 8. DESCARGAR REPORTE EXCEL
 app.get('/api/reporte-salidas', verificarToken, async (req, res) => {
     try {
         const workbook = new ExcelJS.Workbook();
-        const worksheet = workbook.addWorksheet('Inventario Actual');
-
-        // Columnas
+        const worksheet = workbook.addWorksheet('Inventario');
         worksheet.columns = [
             { header: 'SKU', key: 'sku', width: 15 },
             { header: 'Producto', key: 'nombre', width: 30 },
@@ -187,32 +166,23 @@ app.get('/api/reporte-salidas', verificarToken, async (req, res) => {
             { header: 'Costo Unitario ($)', key: 'costo_unitario', width: 18 }
         ];
 
-        // Consulta
         const query = `
-            SELECT p.sku, p.nombre, c.nombre AS categoria_nombre, 
-                   COALESCE(SUM(e.stock_restante), 0) AS stock_restante, 
-                   COALESCE(e.costo_unitario, 0) AS costo_unitario
+            SELECT p.sku, p.nombre, c.nombre AS categoria_nombre, COALESCE(SUM(e.stock_restante), 0) AS stock_restante, COALESCE(e.costo_unitario, 0) AS costo_unitario
             FROM productos p
             LEFT JOIN categorias c ON p.categoria_id = c.id
             LEFT JOIN entradas e ON p.id = e.producto_id AND e.stock_restante > 0
-            GROUP BY p.id, p.sku, p.nombre, c.nombre, e.costo_unitario
-            ORDER BY p.nombre ASC;
+            GROUP BY p.id, p.sku, p.nombre, c.nombre, e.costo_unitario ORDER BY p.nombre ASC;
         `;
         const resultado = await pool.query(query);
         worksheet.addRows(resultado.rows);
 
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', 'attachment; filename="reporte_inventario.xlsx"');
-
         await workbook.xlsx.write(res);
         res.end();
     } catch (error) {
-        console.error("Error al generar reporte Excel:", error);
-        res.status(500).json({ error: 'No se pudo generar el reporte en Excel' });
+        res.status(500).json({ error: 'Error al generar reporte' });
     }
 });
 
-// === INICIAR SERVIDOR === (SIEMPRE AL FINAL)
-app.listen(PORT, () => {
-    console.log(`Servidor en puerto ${PORT} blindado y seguro`);
-});
+app.listen(PORT, () => console.log(`Servidor en puerto ${PORT} blindado y seguro`));

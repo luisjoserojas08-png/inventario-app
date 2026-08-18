@@ -14,6 +14,13 @@
   <script>
     const token = localStorage.getItem('erp_token') || localStorage.getItem('token');
     if (!token) window.location.href = 'login.html';
+
+    // Decodificar el rol del usuario para controles de interfaz
+    function parseJwt(token) {
+        try { return JSON.parse(atob(token.split('.')[1])); } catch (e) { return null; }
+    }
+    const currentUser = parseJwt(token);
+    const userRole = currentUser ? currentUser.rol : 'Consulta';
   </script>
 
   <div class="flex h-screen overflow-hidden">
@@ -22,12 +29,17 @@
       <div class="p-6 text-xl font-bold text-white tracking-wider border-b border-slate-800 flex items-center space-x-2">
         <span>ERP Genética</span>
       </div>
-      <nav class="flex-1 p-4 space-y-2">
-        <a href="index.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition">📊 Dashboard Inventario</a>
-        <a href="entradas.html" class="block px-4 py-2.5 rounded-lg bg-corporate-primary text-white font-medium transition shadow-xs">📥 Registro de Compras</a>
-        <a href="categorias.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition">🏷️ Categorías</a>
-        <button onclick="descargarReporte()" class="w-full text-left block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition">📑 Descargar Reporte Excel</button>
-      </nav>
+     <nav class="flex-1 p-4 space-y-2">
+  <a href="index.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition">📊 Dashboard Inventario</a>
+  <a href="entradas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition">📥 Registro de Compras</a>
+  <a href="categorias.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition">🏷️ Categorías</a>
+  
+  <!-- AQUÍ VA EL NUEVO ENLACE -->
+  <a href="usuarios.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition">👥 Gestión de Usuarios</a>
+  
+  <!-- El botón de Excel siempre al final -->
+  <button onclick="descargarReporte()" class="w-full text-left block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition">📑 Descargar Reporte Excel</button>
+</nav>
       <div class="p-4 border-t border-slate-800 text-xs text-slate-500">Sesión Activa • Neon DB</div>
     </aside>
 
@@ -41,7 +53,7 @@
       <main class="p-8 grid grid-cols-1 xl:grid-cols-2 gap-8">
         
         <!-- PANEL 1: CREAR PRODUCTO -->
-        <div class="bg-white rounded-xl border border-corporate-border shadow-xs overflow-hidden h-fit">
+        <div id="panel-producto" class="bg-white rounded-xl border border-corporate-border shadow-xs overflow-hidden h-fit">
           <div class="px-6 py-4 border-b border-corporate-border bg-slate-50">
             <h3 class="font-bold text-slate-700">1. Crear Nuevo Producto</h3>
             <p class="text-xs text-slate-500 mt-1">Registra el artículo en el sistema antes de darle entrada.</p>
@@ -73,7 +85,7 @@
         </div>
 
         <!-- PANEL 2: REGISTRAR LOTE -->
-        <div class="bg-white rounded-xl border border-corporate-border shadow-xs overflow-hidden h-fit">
+        <div id="panel-entrada" class="bg-white rounded-xl border border-corporate-border shadow-xs overflow-hidden h-fit">
           <div class="px-6 py-4 border-b border-corporate-border bg-slate-50">
             <h3 class="font-bold text-slate-700">2. Ingresar Lote de Compra (CM303)</h3>
             <p class="text-xs text-slate-500 mt-1">Selecciona un producto existente para cargar stock y costo.</p>
@@ -109,6 +121,19 @@
   </div>
 
   <script>
+    // Ocultar paneles de escritura si el rol es solo Consulta
+    if (userRole === 'Consulta') {
+      document.getElementById('panel-producto').style.display = 'none';
+      document.getElementById('panel-entrada').style.display = 'none';
+      
+      const mainContainer = document.querySelector('main');
+      mainContainer.classList.remove('xl:grid-cols-2');
+      mainContainer.innerHTML = `<div class="bg-white p-6 rounded-xl border border-corporate-border shadow-xs text-center col-span-2">
+        <h3 class="text-lg font-bold text-slate-700">Acceso de Consulta</h3>
+        <p class="text-sm text-slate-500 mt-2">Tu cuenta tiene privilegios de lectura. Puedes revisar el Dashboard y descargar el reporte en Excel desde el menú lateral.</p>
+      </div>`;
+    }
+
     async function descargarReporte() {
         try {
             const res = await fetch('/api/reporte-salidas', { headers: { 'Authorization': `Bearer ${token}` } });
@@ -122,17 +147,15 @@
     }
     function cerrarSesion() { localStorage.clear(); window.location.href = 'login.html'; }
 
-    // CARGAR DESPLEGABLES
     async function cargarCombos() {
+      if (userRole === 'Consulta') return;
       try {
-        // Categorías
         const resCat = await fetch('/api/categorias', { headers: { 'Authorization': `Bearer ${token}` }});
         const categorias = await resCat.json();
         const selCat = document.getElementById('prod-categoria');
         selCat.innerHTML = '<option value="">Seleccione una categoría</option>' + 
           categorias.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
 
-        // Productos
         const resProd = await fetch('/api/productos', { headers: { 'Authorization': `Bearer ${token}` }});
         const productos = await resProd.json();
         const selProd = document.getElementById('ent-producto');
@@ -141,8 +164,7 @@
       } catch (e) { console.error("Error cargando listas", e); }
     }
 
-    // ENVIAR FORMULARIO DE PRODUCTO
-    document.getElementById('form-producto').addEventListener('submit', async (e) => {
+    document.getElementById('form-producto')?.addEventListener('submit', async (e) => {
       e.preventDefault();
       const btn = document.getElementById('btn-prod'); const msj = document.getElementById('msj-prod');
       btn.disabled = true; btn.innerHTML = 'Guardando...'; msj.className = 'hidden';
@@ -163,7 +185,7 @@
           msj.textContent = '✅ Producto creado en el maestro.';
           msj.className = 'px-4 py-3 rounded-lg text-sm font-medium bg-emerald-50 text-emerald-700 block mt-4';
           document.getElementById('form-producto').reset();
-          cargarCombos(); // Recargar la lista de la derecha para que aparezca
+          cargarCombos();
         } else {
           msj.textContent = '❌ ' + (data.error || 'Error al guardar');
           msj.className = 'px-4 py-3 rounded-lg text-sm font-medium bg-red-50 text-red-700 block mt-4';
@@ -173,8 +195,7 @@
       } finally { btn.disabled = false; btn.innerHTML = 'Guardar Producto'; }
     });
 
-    // ENVIAR FORMULARIO DE LOTE
-    document.getElementById('form-entrada').addEventListener('submit', async (e) => {
+    document.getElementById('form-entrada')?.addEventListener('submit', async (e) => {
       e.preventDefault();
       const btn = document.getElementById('btn-ent'); const msj = document.getElementById('msj-ent');
       btn.disabled = true; btn.innerHTML = 'Registrando...'; msj.className = 'hidden';
@@ -204,7 +225,6 @@
       } finally { btn.disabled = false; btn.innerHTML = 'Registrar Lote'; }
     });
 
-    // Inicializar listas al cargar la página
     cargarCombos();
   </script>
 </body>

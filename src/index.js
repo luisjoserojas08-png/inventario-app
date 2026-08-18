@@ -294,31 +294,34 @@ app.get('/api/reporte/salidas', verificarToken, async (req, res) => {
     }
 });
 
-// 9. DESCARGAR REPORTE EXCEL
+// 9. DESCARGAR REPORTE EXCEL (Con ID de Lote)
 app.get('/api/reporte-salidas', verificarToken, async (req, res) => {
     try {
         const workbook = new ExcelJS.Workbook();
-        const worksheet = workbook.addWorksheet('Inventario');
+        const worksheet = workbook.addWorksheet('Inventario por Lotes');
         worksheet.columns = [
             { header: 'SKU', key: 'sku', width: 15 },
             { header: 'Producto', key: 'nombre', width: 30 },
+            { header: 'Lote ID', key: 'lote_id', width: 15 },
             { header: 'Categoría', key: 'categoria_nombre', width: 20 },
             { header: 'Stock Restante', key: 'stock_restante', width: 15 },
             { header: 'Costo Unitario ($)', key: 'costo_unitario', width: 18 }
         ];
 
         const query = `
-            SELECT p.sku, p.nombre, c.nombre AS categoria_nombre, COALESCE(SUM(e.stock_restante), 0) AS stock_restante, COALESCE(e.costo_unitario, 0) AS costo_unitario
-            FROM productos p
+            SELECT p.sku, p.nombre, e.id AS lote_id, c.nombre AS categoria_nombre, 
+                   e.stock_restante, e.costo_unitario
+            FROM entradas e
+            JOIN productos p ON e.producto_id = p.id
             LEFT JOIN categorias c ON p.categoria_id = c.id
-            LEFT JOIN entradas e ON p.id = e.producto_id AND e.stock_restante > 0
-            GROUP BY p.id, p.sku, p.nombre, c.nombre, e.costo_unitario ORDER BY p.nombre ASC;
+            WHERE e.stock_restante > 0
+            ORDER BY p.nombre ASC;
         `;
         const resultado = await pool.query(query);
         worksheet.addRows(resultado.rows);
 
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.setHeader('Content-Disposition', 'attachment; filename="reporte_inventario.xlsx"');
+        res.setHeader('Content-Disposition', 'attachment; filename="reporte_inventario_lotes.xlsx"');
         await workbook.xlsx.write(res);
         res.end();
     } catch (error) {

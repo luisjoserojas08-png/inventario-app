@@ -330,3 +330,70 @@ app.get('/api/reporte-salidas', verificarToken, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor en puerto ${PORT} blindado y seguro`));
+// 10. ELIMINAR O EDITAR ENTRADAS/SALIDAS (Solo Admin)
+app.delete('/api/admin/movimientos/:tipo/:id', verificarToken, verificarRol(['Administrador']), async (req, res) => {
+    const { tipo, id } = req.params;
+    const tabla = tipo === 'entrada' ? 'entradas' : 'salidas';
+    
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        
+        // Si es salida, debemos revertir el stock en productos
+        if (tabla === 'salidas') {
+            const mov = await client.query('SELECT producto_id, cantidad FROM salidas WHERE id = $1', [id]);
+            if (mov.rows.length > 0) {
+                await client.query('UPDATE productos SET stock_actual = stock_actual + $1 WHERE id = $2', 
+                    [mov.rows[0].cantidad, mov.rows[0].producto_id]);
+            }
+        }
+        
+        await client.query(`DELETE FROM ${tabla} WHERE id = $1`, [id]);
+        await client.query('COMMIT');
+        res.json({ mensaje: 'Registro eliminado y stock revertido' });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: 'Error al eliminar el registro' });
+    } finally {
+        client.release();
+    }
+});
+// RUTA SEGURA CON LOG DE AUDITORÍA (Solo Admin)
+app.delete('/api/admin/movimientos/:tipo/:id', verificarToken, verificarRol(['Administrador']), async (req, res) => {
+    const { tipo, id } = req.params;
+    const tabla = tipo === 'entrada' ? 'entradas' : 'salidas';
+    const usuario_id = req.user.id; // Obtenemos al admin que realiza la acción
+    
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        
+        // 1. Obtener detalles del registro antes de borrar para el LOG
+        const registro = await client.query(`SELECT * FROM ${tabla} WHERE id = $1`, [id]);
+        if (registro.rows.length === 0) throw new Error('Registro no encontrado');
+        const detalles = JSON.stringify(registro.rows[0]);
+
+        // 2. Si es salida, revertir stock
+        if (tabla === 'salidas') {
+            await client.query('UPDATE productos SET stock_actual = stock_actual + $1 WHERE id = $2', 
+                [registro.rows[0].cantidad, registro.rows[0].producto_id]);
+        }
+
+        // 3. Registrar en LOG de Auditoría
+        await client.query(
+            `INSERT INTO logs_auditoria (usuario_id, accion, tabla_afectada, registro_id, detalles) VALUES ($1, 'BORRADO', $2, $3, $4)`,
+            [usuario_id, tabla, id, detalles]
+        );
+        
+        // 4. Borrar el registro
+        await client.query(`DELETE FROM ${tabla} WHERE id = $1`, [id]);
+        
+        await client.query('COMMIT');
+        res.json({ mensaje: 'Registro eliminado y log guardado exitosamente' });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: error.message });
+    } finally {
+        client.release();
+    }
+});

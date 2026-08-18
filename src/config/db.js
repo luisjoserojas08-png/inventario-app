@@ -1,8 +1,6 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
-// Extraemos los datos de la URL o usamos variables individuales si existen,
-// pero configuramos explícitamente el host, puerto y family: 4 para IPv4.
 const pool = new Pool({
   host: process.env.DB_HOST || 'db.bwgkgpvkdmgosocudgbi.supabase.co',
   database: process.env.DB_NAME || 'postgres',
@@ -12,7 +10,7 @@ const pool = new Pool({
   ssl: {
     rejectUnauthorized: false
   },
-  family: 4 // OBLIGA al sistema a usar IPv4 y evita el error ENETUNREACH en Render
+  family: 4 // Fuerza IPv4 estrictamente
 });
 
 module.exports = pool;

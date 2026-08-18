@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ERP - Control de Inventario</title>
-    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -25,65 +24,43 @@
 </head>
 <body class="bg-corporate-light font-sans text-slate-800 subpixel-antialiased">
 
-  <!-- Validación blindada del token al cargar la página -->
   <script>
     const token = localStorage.getItem('erp_token') || localStorage.getItem('token');
-    if (!token) {
-        window.location.href = 'login.html';
-    }
+    if (!token) { window.location.href = 'login.html'; }
   </script>
 
   <div class="flex h-screen overflow-hidden">
     
-    <!-- Barra Lateral (Sidebar) -->
+    <!-- Barra Lateral (Sidebar) Corporativa -->
     <aside class="w-64 bg-corporate-dark text-slate-300 flex flex-col hidden md:flex">
       <div class="p-6 text-xl font-bold text-white tracking-wider border-b border-slate-800 flex items-center space-x-2">
-        <span>ERP Inventario</span>
+        <span>ERP Genética</span>
       </div>
       <nav class="flex-1 p-4 space-y-2">
-        <a href="#" class="block px-4 py-2.5 rounded-lg bg-corporate-primary text-white font-medium transition shadow-xs">Dashboard</a>
-        <a href="/api/reporte-salidas" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition">Descargar Reporte Excel</a>
+        <a href="index.html" class="block px-4 py-2.5 rounded-lg bg-corporate-primary text-white font-medium transition shadow-xs">📊 Dashboard Inventario</a>
+        <a href="entradas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition">📥 Registro de Compras (Entradas)</a>
+        <a href="/api/reporte-salidas" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition">📑 Descargar Reporte Excel</a>
       </nav>
       <div class="p-4 border-t border-slate-800 text-xs text-slate-500">
-        Sesión Activa • Neon DB
+        Módulo CM303 • Conectado a Neon
       </div>
     </aside>
 
     <!-- Contenido Principal -->
     <div class="flex-1 flex flex-col overflow-y-auto">
       
-      <!-- Cabecera -->
       <header class="bg-white border-b border-corporate-border h-16 flex items-center justify-between px-8 shadow-xs">
-        <h1 class="text-lg font-semibold text-slate-700">Panel General de Existencias</h1>
+        <h1 class="text-lg font-semibold text-slate-700">Panel General de Existencias (Lotes)</h1>
         <div class="flex items-center space-x-4">
           <span id="nombreUsuario" class="text-sm font-medium text-slate-600"></span>
           <button onclick="cerrarSesion()" class="text-sm text-red-600 hover:text-red-800 font-medium bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition">Cerrar Sesión</button>
         </div>
       </header>
 
-      <!-- Cuerpo -->
       <main class="p-8">
-        
-        <!-- Tarjetas de Resumen -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div class="bg-white p-6 rounded-xl border border-corporate-border shadow-xs">
-            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Estado del Sistema</p>
-            <h3 class="text-xl font-bold text-emerald-600 mt-2">Operativo (Online)</h3>
-          </div>
-          <div class="bg-white p-6 rounded-xl border border-corporate-border shadow-xs">
-            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Base de Datos</p>
-            <h3 class="text-xl font-bold text-blue-600 mt-2">Neon PostgreSQL</h3>
-          </div>
-          <div class="bg-white p-6 rounded-xl border border-corporate-border shadow-xs">
-            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Método de Inventario</p>
-            <h3 class="text-xl font-bold text-slate-700 mt-2">FIFO (Lotes)</h3>
-          </div>
-        </div>
-
-        <!-- Sección de Tabla / Lotes -->
         <div class="bg-white rounded-xl border border-corporate-border shadow-xs overflow-hidden">
           <div class="px-6 py-4 border-b border-corporate-border flex justify-between items-center">
-            <h3 class="font-bold text-slate-700">Inventario Actual por Lotes</h3>
+            <h3 class="font-bold text-slate-700">Inventario Actualizado</h3>
             <button onclick="cargarInventario()" class="bg-corporate-primary hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition shadow-xs">
               Actualizar Datos
             </button>
@@ -96,50 +73,32 @@
                   <th class="px-6 py-3 font-semibold">Producto</th>
                   <th class="px-6 py-3 font-semibold">Categoría</th>
                   <th class="px-6 py-3 font-semibold">Stock Restante</th>
-                  <th class="px-6 py-3 font-semibold">Costo Unitario</th>
+                  <th class="px-6 py-3 font-semibold">Costo Unitario ($)</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-corporate-border text-sm text-slate-600" id="tabla-inventario">
-                <tr>
-                  <td colspan="5" class="px-6 py-6 text-center text-slate-400">Cargando existencias...</td>
-                </tr>
+                <tr><td colspan="5" class="px-6 py-6 text-center text-slate-400">Cargando existencias...</td></tr>
               </tbody>
             </table>
           </div>
         </div>
-
       </main>
     </div>
   </div>
 
-  <!-- Lógica y consumo de API -->
   <script>
-    // Mostrar nombre de usuario si está guardado
     const nombreGuardado = localStorage.getItem('erp_usuario');
-    if (nombreGuardado) {
-      document.getElementById('nombreUsuario').innerText = `Hola, ${nombreGuardado}`;
-    }
+    if (nombreGuardado) { document.getElementById('nombreUsuario').innerText = `Hola, ${nombreGuardado}`; }
 
     function cerrarSesion() {
-      localStorage.removeItem('erp_token');
-      localStorage.removeItem('token');
-      localStorage.removeItem('erp_usuario');
+      localStorage.clear();
       window.location.href = 'login.html';
     }
 
     async function cargarInventario() {
       try {
-        const res = await fetch('/api/inventario-lotes', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        
-        if (res.status === 401 || res.status === 403) {
-          cerrarSesion();
-          return;
-        }
-
+        const res = await fetch('/api/inventario-lotes', { headers: { 'Authorization': `Bearer ${token}` } });
+        if (res.status === 401) { cerrarSesion(); return; }
         const lotes = await res.json();
         const tbody = document.getElementById('tabla-inventario');
         
@@ -157,11 +116,8 @@
             <td class="px-6 py-4 font-medium text-slate-700">$${Number(lote.costo_unitario).toFixed(2)}</td>
           </tr>
         `).join('');
-      } catch (err) {
-        console.error("Error al cargar inventario:", err);
-      }
+      } catch (err) { console.error(err); }
     }
-
     cargarInventario();
   </script>
 </body>

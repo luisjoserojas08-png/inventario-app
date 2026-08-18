@@ -3,458 +3,253 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Inventario</title>
+    <title>ERP - Gestión de Inventario</title>
     <style>
-        body { font-family: Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; color: #333; }
-        .container { max-width: 900px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        h1, h2 { color: #007bff; }
-        .form-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #eef2f5; margin: 0; padding: 20px; color: #333; }
+        .dashboard { max-width: 1100px; margin: 0 auto; display: grid; gap: 20px; grid-template-columns: 1fr 1fr; }
+        .panel { background: white; padding: 20px; border-radius: 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border-top: 4px solid #0056b3; }
+        .panel-full { grid-column: span 2; border-top: 4px solid #28a745; }
+        h1 { text-align: center; color: #004085; margin-bottom: 30px; grid-column: span 2; }
+        h3 { margin-top: 0; color: #333; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        .form-group { margin-bottom: 12px; }
+        label { display: block; font-size: 13px; font-weight: bold; margin-bottom: 4px; color: #555; }
         input, select { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
-        button { background-color: #28a745; color: white; border: none; padding: 10px 15px; cursor: pointer; border-radius: 4px; font-size: 16px; }
-        button:hover { background-color: #218838; }
-        .btn-azul { background-color: #007bff; }
-        .btn-azul:hover { background-color: #0056b3; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; margin-bottom: 30px; }
-        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
-        th { background-color: #007bff; color: white; }
+        button { background-color: #0056b3; color: white; border: none; padding: 9px 15px; cursor: pointer; border-radius: 4px; font-weight: bold; width: 100%; margin-top: 10px; }
+        button:hover { background-color: #004494; }
+        .btn-salida { background-color: #dc3545; }
+        .btn-salida:hover { background-color: #c82333; }
+        .btn-entrada { background-color: #28a745; }
+        .btn-entrada:hover { background-color: #218838; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px; }
+        th, td { border: 1px solid #dee2e6; padding: 10px; text-align: left; }
+        th { background-color: #f8f9fa; color: #495057; }
+        .badge-danger { background: #dc3545; color: white; padding: 3px 8px; border-radius: 12px; font-size: 12px; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h1>📦 Sistema de Inventario</h1>
-    
-    <!-- Formulario para Registrar Producto -->
-    <h2>Registrar Nuevo Producto</h2>
-    <form id="productoForm">
-        <div class="form-group">
-            <label for="sku">SKU (Código):</label>
-            <input type="text" id="sku" placeholder="Ej. PROD-001" required>
-        </div>
-        <div class="form-group">
-            <label for="nombre">Nombre del Producto:</label>
-            <input type="text" id="nombre" placeholder="Ej. Camiseta Polo" required>
-        </div>
-        <div class="form-group">
-            <label for="categoria_id">Categoría:</label>
-            <select id="categoria_id" required>
-                <option value="">Cargando categorías...</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label for="stock_actual">Stock Inicial:</label>
-            <input type="number" id="stock_actual" value="10" required>
-        </div>
-        <div class="form-group">
-            <label for="precio_costo">Precio de Costo ($):</label>
-            <input type="number" step="0.01" id="precio_costo" placeholder="0.00" required>
-        </div>
-        <button type="submit">Guardar Producto</button>
-    </form>
+<div class="dashboard">
+    <h1>📊 Sistema de Gestión y Control de Inventario</h1>
 
-    <hr style="margin: 30px 0;">
+    <!-- PANEL IZQUIERDO: MOVIMIENTOS -->
+    <div class="panel">
+        <h3>Logística de Movimientos</h3>
+        
+        <!-- ENTRADAS -->
+        <form id="entradaForm" style="margin-bottom: 30px; background: #f8fff9; padding: 15px; border-left: 3px solid #28a745;">
+            <h4 style="margin-top:0; color: #28a745;">(+) Registrar Entrada</h4>
+            <div class="form-group">
+                <label>Producto:</label>
+                <select id="ent_producto" required><option value="">Cargando...</option></select>
+            </div>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Cantidad:</label>
+                    <input type="number" id="ent_cantidad" min="1" required>
+                </div>
+                <div class="form-group">
+                    <label>Costo Unitario ($):</label>
+                    <input type="number" step="0.01" id="ent_costo" required>
+                </div>
+            </div>
+            <button type="submit" class="btn-entrada">Ingresar Stock</button>
+        </form>
 
-    <!-- Formulario para Registrar Entradas de Stock -->
-    <h2>Registrar Entrada de Mercancía</h2>
-    <form id="entradaForm">
-        <div class="form-group">
-            <label for="entrada_producto_id">Seleccionar Producto:</label>
-            <select id="entrada_producto_id" required>
-                <option value="">Cargando productos...</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label for="cantidad_entrada">Cantidad a ingresar:</label>
-            <input type="number" id="cantidad_entrada" min="1" value="5" required>
-        </div>
-        <div class="form-group">
-            <label for="costo_unitario">Costo Unitario ($):</label>
-            <input type="number" step="0.01" id="costo_unitario" placeholder="0.00" required>
-        </div>
-        <button type="submit" class="btn-azul">Registrar Entrada</button>
-    </form>
+        <!-- SALIDAS -->
+        <form id="salidaForm" style="background: #fff8f8; padding: 15px; border-left: 3px solid #dc3545;">
+            <h4 style="margin-top:0; color: #dc3545;">(-) Registrar Salida</h4>
+            <div class="form-group">
+                <label>Producto:</label>
+                <select id="sal_producto" required><option value="">Cargando...</option></select>
+            </div>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Cantidad:</label>
+                    <input type="number" id="sal_cantidad" min="1" required>
+                </div>
+                <div class="form-group">
+                    <label>Motivo/Doc:</label>
+                    <input type="text" id="sal_motivo" placeholder="Ej. Venta #001, Merma" required>
+                </div>
+            </div>
+            <button type="submit" class="btn-salida">Retirar Stock</button>
+        </form>
+    </div>
 
-    <hr style="margin: 30px 0;">
+    <!-- PANEL DERECHO: MAESTROS (Categorias y Productos) -->
+    <div class="panel">
+        <h3>Datos Maestros</h3>
+        
+        <form id="categoriaForm" style="margin-bottom: 20px;">
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Nueva Categoría:</label>
+                    <input type="text" id="nueva_cat" required>
+                </div>
+                <div class="form-group" style="display:flex; align-items:flex-end;">
+                    <button type="submit" style="margin:0;">Guardar Cat.</button>
+                </div>
+            </div>
+        </form>
 
-    <!-- Listado de Productos -->
-    <h2>Inventario Actual</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>SKU</th>
-                <th>Nombre</th>
-                <th>Stock</th>
-                <th>Precio Costo</th>
-            </tr>
-        </thead>
-        <tbody id="tablaProductos">
-            <!-- Dinámico -->
-        </tbody>
-    </table>
+        <form id="productoForm" style="border-top: 1px dashed #ccc; padding-top: 20px;">
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>SKU:</label>
+                    <input type="text" id="prod_sku" required>
+                </div>
+                <div class="form-group">
+                    <label>Nombre:</label>
+                    <input type="text" id="prod_nombre" required>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Categoría:</label>
+                <select id="prod_cat" required><option value="">Cargando...</option></select>
+            </div>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Stock Inicial:</label>
+                    <input type="number" id="prod_stock" value="0" required>
+                </div>
+                <div class="form-group">
+                    <label>Costo Base ($):</label>
+                    <input type="number" step="0.01" id="prod_costo" required>
+                </div>
+            </div>
+            <button type="submit">Crear Producto Nuevo</button>
+        </form>
+    </div>
+
+    <!-- PANEL INFERIOR: VISOR DE INVENTARIO -->
+    <div class="panel panel-full">
+        <h3>Estado de Inventario en Tiempo Real</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>SKU</th>
+                    <th>Categoría</th>
+                    <th>Nombre</th>
+                    <th>Costo</th>
+                    <th>Stock Actual</th>
+                    <th>Estado</th>
+                </tr>
+            </thead>
+            <tbody id="tablaInventario"></tbody>
+        </table>
+    </div>
 </div>
 
 <script>
-    const API_URL = '/api/productos';
-    const CAT_URL = '/api/categorias';
-    const ENT_URL = '/api/entradas';
+    // --- LÓGICA JAVASCRIPT ---
+    const API = { cat: '/api/categorias', prod: '/api/productos', ent: '/api/entradas', sal: '/api/salidas' };
 
-    // Cargar Categorías en el Select
-    async function cargarCategorias() {
+    async function cargarDatos() {
         try {
-            const res = await fetch(CAT_URL);
-            const categorias = await res.json();
-            const select = document.getElementById('categoria_id');
-            select.innerHTML = '';
-            categorias.forEach(c => {
-                select.innerHTML += `<option value="${c.id}">${c.nombre}</option>`;
-            });
-        } catch (error) {
-            console.error('Error al cargar categorías:', error);
-        }
-    }
+            // 1. Cargar Categorías
+            const resCat = await fetch(API.cat);
+            const categorias = await resCat.json();
+            const comboCat = document.getElementById('prod_cat');
+            comboCat.innerHTML = '<option value="">Seleccione...</option>';
+            categorias.forEach(c => comboCat.innerHTML += `<option value="${c.id}">${c.nombre}</option>`);
 
-    // Cargar Productos en la tabla y en el select de entradas
-    async function cargarProductos() {
-        try {
-            const res = await fetch(API_URL);
-            const productos = await res.json();
+            // 2. Cargar Productos
+            const resProd = await fetch(API.prod);
+            const productos = await resProd.json();
             
-            const tabla = document.getElementById('tablaProductos');
-            const selectEntrada = document.getElementById('entrada_producto_id');
+            const tabla = document.getElementById('tablaInventario');
+            const comboEnt = document.getElementById('ent_producto');
+            const comboSal = document.getElementById('sal_producto');
             
             tabla.innerHTML = '';
-            selectEntrada.innerHTML = '<option value="">Seleccione un producto</option>';
-
-            if (productos.length === 0) {
-                tabla.innerHTML = '<tr><td colspan="5" style="text-align: center;">No hay productos registrados.</td></tr>';
-                return;
-            }
+            comboEnt.innerHTML = '<option value="">Seleccione...</option>';
+            comboSal.innerHTML = '<option value="">Seleccione...</option>';
 
             productos.forEach(p => {
+                // Validación de stock mínimo
+                const estadoHTML = p.stock_actual <= p.stock_minimo 
+                    ? '<span class="badge-danger">Reabastecer</span>' 
+                    : '<span style="color:#28a745; font-weight:bold;">Óptimo</span>';
+
                 tabla.innerHTML += `
                     <tr>
-                        <td>${p.id}</td>
-                        <td>${p.sku}</td>
+                        <td><strong>${p.sku}</strong></td>
+                        <td>${p.categoria_nombre || 'N/A'}</td>
                         <td>${p.nombre}</td>
-                        <td>${p.stock_actual}</td>
                         <td>$${parseFloat(p.precio_costo).toFixed(2)}</td>
+                        <td style="font-size: 16px; font-weight: bold;">${p.stock_actual}</td>
+                        <td>${estadoHTML}</td>
                     </tr>
                 `;
-                selectEntrada.innerHTML += `<option value="${p.id}">${p.nombre} (SKU: ${p.sku})</option>`;
+                const option = `<option value="${p.id}">${p.sku} - ${p.nombre} (Disp: ${p.stock_actual})</option>`;
+                comboEnt.innerHTML += option;
+                comboSal.innerHTML += option;
             });
         } catch (error) {
-            console.error('Error al cargar productos:', error);
+            console.error('Error cargando la data:', error);
         }
     }
 
-    // Registrar Nuevo Producto
-    document.getElementById('productoForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const nuevoProducto = {
-            sku: document.getElementById('sku').value.trim(),
-            nombre: document.getElementById('nombre').value.trim(),
-            categoria_id: parseInt(document.getElementById('categoria_id').value),
-            stock_actual: parseInt(document.getElementById('stock_actual').value),
-            stock_minimo: 5,
-            precio_costo: parseFloat(document.getElementById('precio_costo').value)
-        };
-
-        const res = await fetch(API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(nuevoProducto)
-        });
-
-        if (res.ok) {
-            alert('¡Producto registrado con éxito!');
-            document.getElementById('productoForm').reset();
-            cargarCategorias();
-            cargarProductos();
-        } else {
-            alert('Error al registrar el producto.');
-        }
-    });
-
-    // Registrar Entrada de Mercancía
-    document.getElementById('entradaForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const nuevaEntrada = {
-            producto_id: parseInt(document.getElementById('entrada_producto_id').value),
-            cantidad: parseInt(document.getElementById('cantidad_entrada').value),
-            costo_unitario: parseFloat(document.getElementById('costo_unitario').value)
-        };
-
-        const res = await fetch(ENT_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(nuevaEntrada)
-        });
-
-        if (res.ok) {
-            alert('¡Entrada de stock registrada con éxito!');
-            document.getElementById('entradaForm').reset();
-            cargarProductos(); // Actualiza las cantidades de stock en la tabla
-        } else {
-            alert('Error al registrar la entrada.');
-        }
-    });
-
-    // Inicializar datos al cargar la página
-    cargarCategorias();
-    cargarProductos();
-</script>
-
-</body>
-</html>
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Inventario</title>
-    <style>
-        body { font-family: Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; color: #333; }
-        .container { max-width: 900px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        h1, h2 { color: #007bff; }
-        .form-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; font-weight: bold; }
-        input, select { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
-        button { background-color: #28a745; color: white; border: none; padding: 10px 15px; cursor: pointer; border-radius: 4px; font-size: 16px; }
-        button:hover { background-color: #218838; }
-        .btn-azul { background-color: #007bff; }
-        .btn-azul:hover { background-color: #0056b3; }
-        .btn-secundario { background-color: #6c757d; font-size: 14px; padding: 6px 10px; }
-        .btn-secundario:hover { background-color: #5a6268; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; margin-bottom: 30px; }
-        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
-        th { background-color: #007bff; color: white; }
-        .categoria-box { display: flex; gap: 10px; align-items: flex-end; }
-    </style>
-</head>
-<body>
-
-<div class="container">
-    <h1>📦 Sistema de Inventario</h1>
-    
-    <!-- Sección para Crear Categoría -->
-    <h2>Gestión de Categorías</h2>
-    <form id="categoriaForm">
-        <div class="form-group categoria-box">
-            <div style="flex-grow: 1;">
-                <label for="nueva_categoria">Nueva Categoría:</label>
-                <input type="text" id="nueva_categoria" placeholder="Ej. Electrónica, Ropa, etc." required>
-            </div>
-            <button type="submit" class="btn-secundario">Agregar Categoría</button>
-        </div>
-    </form>
-
-    <hr style="margin: 30px 0;">
-
-    <!-- Formulario para Registrar Producto -->
-    <h2>Registrar Nuevo Producto</h2>
-    <form id="productoForm">
-        <div class="form-group">
-            <label for="sku">SKU (Código):</label>
-            <input type="text" id="sku" placeholder="Ej. PROD-001" required>
-        </div>
-        <div class="form-group">
-            <label for="nombre">Nombre del Producto:</label>
-            <input type="text" id="nombre" placeholder="Ej. Camiseta Polo" required>
-        </div>
-        <div class="form-group">
-            <label for="categoria_id">Categoría:</label>
-            <select id="categoria_id" required>
-                <option value="">Cargando categorías...</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label for="stock_actual">Stock Inicial:</label>
-            <input type="number" id="stock_actual" value="10" required>
-        </div>
-        <div class="form-group">
-            <label for="precio_costo">Precio de Costo ($):</label>
-            <input type="number" step="0.01" id="precio_costo" placeholder="0.00" required>
-        </div>
-        <button type="submit">Guardar Producto</button>
-    </form>
-
-    <hr style="margin: 30px 0;">
-
-    <!-- Formulario para Registrar Entradas de Stock -->
-    <h2>Registrar Entrada de Mercancía</h2>
-    <form id="entradaForm">
-        <div class="form-group">
-            <label for="entrada_producto_id">Seleccionar Producto:</label>
-            <select id="entrada_producto_id" required>
-                <option value="">Cargando productos...</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label for="cantidad_entrada">Cantidad a ingresar:</label>
-            <input type="number" id="cantidad_entrada" min="1" value="5" required>
-        </div>
-        <div class="form-group">
-            <label for="costo_unitario">Costo Unitario ($):</label>
-            <input type="number" step="0.01" id="costo_unitario" placeholder="0.00" required>
-        </div>
-        <button type="submit" class="btn-azul">Registrar Entrada</button>
-    </form>
-
-    <hr style="margin: 30px 0;">
-
-    <!-- Listado de Productos -->
-    <h2>Inventario Actual</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>SKU</th>
-                <th>Nombre</th>
-                <th>Stock</th>
-                <th>Precio Costo</th>
-            </tr>
-        </thead>
-        <tbody id="tablaProductos">
-            <!-- Dinámico -->
-        </tbody>
-    </table>
-</div>
-
-<script>
-    const API_URL = '/api/productos';
-    const CAT_URL = '/api/categorias';
-    const ENT_URL = '/api/entradas';
-
-    // Cargar Categorías en el Select (List Box)
-    async function cargarCategorias() {
+    // Funciones genéricas para peticiones POST
+    async function enviarPost(url, payload, formId) {
         try {
-            const res = await fetch(CAT_URL);
-            const categorias = await res.json();
-            const select = document.getElementById('categoria_id');
-            select.innerHTML = '<option value="">Seleccione una categoría</option>';
-            
-            categorias.forEach(c => {
-                select.innerHTML += `<option value="${c.id}">${c.nombre}</option>`;
-            });
-        } catch (error) {
-            console.error('Error al cargar categorías:', error);
-        }
-    }
-
-    // Registrar Nueva Categoría desde la interfaz
-    document.getElementById('categoriaForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const nombreCat = document.getElementById('nueva_categoria').value.trim();
-
-        try {
-            const res = await fetch(CAT_URL, {
+            const res = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ nombre: nombreCat })
+                body: JSON.stringify(payload)
             });
-
+            const data = await res.json();
             if (res.ok) {
-                alert('¡Categoría agregada con éxito!');
-                document.getElementById('categoriaForm').reset();
-                cargarCategorias(); // Recarga automáticamente el menú desplegable
+                document.getElementById(formId).reset();
+                cargarDatos(); // Refrescar todo
+                alert('✅ Operación exitosa');
             } else {
-                alert('Error al registrar la categoría.');
+                alert('❌ Error: ' + data.error);
             }
         } catch (error) {
-            console.error('Error:', error);
-        }
-    });
-
-    // Cargar Productos en la tabla y en el select de entradas
-    async function cargarProductos() {
-        try {
-            const res = await fetch(API_URL);
-            const productos = await res.json();
-            
-            const tabla = document.getElementById('tablaProductos');
-            const selectEntrada = document.getElementById('entrada_producto_id');
-            
-            tabla.innerHTML = '';
-            selectEntrada.innerHTML = '<option value="">Seleccione un producto</option>';
-
-            if (productos.length === 0) {
-                tabla.innerHTML = '<tr><td colspan="5" style="text-align: center;">No hay productos registrados.</td></tr>';
-                return;
-            }
-
-            productos.forEach(p => {
-                tabla.innerHTML += `
-                    <tr>
-                        <td>${p.id}</td>
-                        <td>${p.sku}</td>
-                        <td>${p.nombre}</td>
-                        <td>${p.stock_actual}</td>
-                        <td>$${parseFloat(p.precio_costo).toFixed(2)}</td>
-                    </tr>
-                `;
-                selectEntrada.innerHTML += `<option value="${p.id}">${p.nombre} (SKU: ${p.sku})</option>`;
-            });
-        } catch (error) {
-            console.error('Error al cargar productos:', error);
+            alert('Error de conexión.');
         }
     }
 
-    // Registrar Nuevo Producto
-    document.getElementById('productoForm').addEventListener('submit', async (e) => {
+    // Listeners de Formularios
+    document.getElementById('categoriaForm').onsubmit = (e) => {
         e.preventDefault();
-        const nuevoProducto = {
-            sku: document.getElementById('sku').value.trim(),
-            nombre: document.getElementById('nombre').value.trim(),
-            categoria_id: parseInt(document.getElementById('categoria_id').value),
-            stock_actual: parseInt(document.getElementById('stock_actual').value),
+        enviarPost(API.cat, { nombre: document.getElementById('nueva_cat').value }, 'categoriaForm');
+    };
+
+    document.getElementById('productoForm').onsubmit = (e) => {
+        e.preventDefault();
+        enviarPost(API.prod, {
+            sku: document.getElementById('prod_sku').value,
+            nombre: document.getElementById('prod_nombre').value,
+            categoria_id: document.getElementById('prod_cat').value,
+            stock_actual: document.getElementById('prod_stock').value,
             stock_minimo: 5,
-            precio_costo: parseFloat(document.getElementById('precio_costo').value)
-        };
+            precio_costo: document.getElementById('prod_costo').value
+        }, 'productoForm');
+    };
 
-        const res = await fetch(API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(nuevoProducto)
-        });
-
-        if (res.ok) {
-            alert('¡Producto registrado con éxito!');
-            document.getElementById('productoForm').reset();
-            cargarProductos();
-        } else {
-            alert('Error al registrar el producto. Verifica que el SKU sea único.');
-        }
-    });
-
-    // Registrar Entrada de Mercancía
-    document.getElementById('entradaForm').addEventListener('submit', async (e) => {
+    document.getElementById('entradaForm').onsubmit = (e) => {
         e.preventDefault();
-        const nuevaEntrada = {
-            producto_id: parseInt(document.getElementById('entrada_producto_id').value),
-            cantidad: parseInt(document.getElementById('cantidad_entrada').value),
-            costo_unitario: parseFloat(document.getElementById('costo_unitario').value)
-        };
+        enviarPost(API.ent, {
+            producto_id: document.getElementById('ent_producto').value,
+            cantidad: document.getElementById('ent_cantidad').value,
+            costo_unitario: document.getElementById('ent_costo').value
+        }, 'entradaForm');
+    };
 
-        const res = await fetch(ENT_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(nuevaEntrada)
-        });
+    document.getElementById('salidaForm').onsubmit = (e) => {
+        e.preventDefault();
+        enviarPost(API.sal, {
+            producto_id: document.getElementById('sal_producto').value,
+            cantidad: document.getElementById('sal_cantidad').value,
+            motivo: document.getElementById('sal_motivo').value
+        }, 'salidaForm');
+    };
 
-        if (res.ok) {
-            alert('¡Entrada de stock registrada con éxito!');
-            document.getElementById('entradaForm').reset();
-            cargarProductos();
-        } else {
-            alert('Error al registrar la entrada.');
-        }
-    });
-
-    // Inicializar datos al cargar la página
-    cargarCategorias();
-    cargarProductos();
+    // Inicializar
+    window.onload = cargarDatos;
 </script>
 
 </body>

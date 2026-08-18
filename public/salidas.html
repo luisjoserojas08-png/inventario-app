@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERP - Registro de Salidas</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = { theme: { extend: { colors: { corporate: { dark: '#0f172a', primary: '#1e40af', light: '#f8fafc', border: '#e2e8f0' } } } } }
+    </script>
+</head>
+<body class="bg-corporate-light font-sans text-slate-800">
+
+  <script>
+    const token = localStorage.getItem('erp_token') || localStorage.getItem('token');
+    if (!token) window.location.href = 'login.html';
+  </script>
+
+  <div class="flex h-screen overflow-hidden">
+    <!-- Sidebar -->
+    <aside class="w-64 bg-corporate-dark text-slate-300 flex flex-col hidden md:flex">
+      <div class="p-6 text-xl font-bold text-white border-b border-slate-800">ERP Genética</div>
+      <nav class="flex-1 p-4 space-y-2">
+        <a href="index.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 transition">📊 Dashboard</a>
+        <a href="entradas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 transition">📥 Registro de Compras</a>
+        <a href="salidas.html" class="block px-4 py-2.5 rounded-lg bg-corporate-primary text-white font-medium transition shadow-xs">📤 Registro de Salidas</a>
+        <a href="categorias.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 transition">🏷️ Categorías</a>
+        <a href="usuarios.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 transition admin-only">👥 Gestión Usuarios</a>
+      </nav>
+    </aside>
+
+    <!-- Main -->
+    <div class="flex-1 flex flex-col overflow-y-auto">
+      <header class="bg-white border-b h-16 flex items-center justify-between px-8 shadow-xs">
+        <h1 class="text-lg font-semibold text-slate-700">Registrar Salida de Inventario</h1>
+        <button onclick="localStorage.clear(); window.location.href='login.html'" class="text-sm text-red-600">Cerrar Sesión</button>
+      </header>
+
+      <main class="p-8 max-w-lg">
+        <div class="bg-white rounded-xl border border-corporate-border p-6 shadow-xs">
+          <form id="form-salida" class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium mb-1">Seleccionar Producto</label>
+              <select id="producto_id" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary"></select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1">Cantidad a Salir</label>
+              <input type="number" id="cantidad" min="1" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary">
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1">Concepto / Destino</label>
+              <input type="text" id="concepto" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary" placeholder="Ej: Venta, Ajuste, Despacho">
+            </div>
+            <div id="mensaje-estado" class="hidden px-4 py-3 rounded-lg text-sm font-medium"></div>
+            <button type="submit" id="btn-submit" class="w-full bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-lg font-medium transition">
+              Registrar Salida
+            </button>
+          </form>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    // Cargar productos al iniciar
+    async function cargarProductos() {
+        const res = await fetch('/api/productos', { headers: { 'Authorization': `Bearer ${token}` } });
+        const productos = await res.json();
+        const select = document.getElementById('producto_id');
+        select.innerHTML = productos.map(p => `<option value="${p.id}">${p.nombre} (SKU: ${p.sku})</option>`).join('');
+    }
+
+    document.getElementById('form-salida').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('btn-submit');
+      const mensajeDiv = document.getElementById('mensaje-estado');
+      
+      btn.disabled = true;
+      btn.innerHTML = 'Procesando...';
+
+      try {
+        const respuesta = await fetch('/api/salidas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({
+            producto_id: document.getElementById('producto_id').value,
+            cantidad: parseInt(document.getElementById('cantidad').value),
+            concepto: document.getElementById('concepto').value
+          })
+        });
+
+        const data = await respuesta.json();
+        if (respuesta.ok) {
+          mensajeDiv.className = 'px-4 py-3 rounded-lg text-sm font-medium bg-emerald-50 text-emerald-700 block mt-4';
+          mensajeDiv.textContent = '✅ Salida registrada con éxito';
+          document.getElementById('form-salida').reset();
+        } else {
+          mensajeDiv.className = 'px-4 py-3 rounded-lg text-sm font-medium bg-red-50 text-red-700 block mt-4';
+          mensajeDiv.textContent = '❌ ' + data.error;
+        }
+      } catch (err) { alert("Error de red"); }
+      finally { btn.disabled = false; btn.innerHTML = 'Registrar Salida'; }
+    });
+
+    cargarProductos();
+  </script>
+</body>
+</html>

@@ -2,77 +2,93 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Acceso - ERP Inventario</title>
-    <link rel="stylesheet" href="style.css">
-    <style>
-        body { display: flex; align-items: center; justify-content: center; height: 100vh; background-color: #004085; }
-        .login-container { max-width: 400px; width: 100%; margin: 0; box-shadow: 0 4px 15px rgba(0,0,0,0.2); border-top: none; }
-        .tabs { display: flex; margin-bottom: 20px; border-radius: 4px; overflow: hidden; }
-        .tab { flex: 1; padding: 12px; text-align: center; background: #eef2f5; cursor: pointer; font-weight: bold; color: #555; transition: 0.3s; }
-        .tab.active { background: #0056b3; color: white; }
-        .form-section { display: none; }
-        .form-section.active { display: block; }
-    </style>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              corporate: {
+                dark: '#0f172a',
+                primary: '#1e40af',
+                light: '#f8fafc',
+                border: '#e2e8f0'
+              }
+            }
+          }
+        }
+      }
+    </script>
 </head>
-<body>
+<body class="bg-slate-900 h-screen flex items-center justify-center p-4">
 
-    <div class="login-container panel">
-        <h2 style="text-align: center; color: #333;">🔒 Acceso al Sistema</h2>
+    <div class="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-800 p-8">
+        <div class="text-center mb-6">
+            <h2 class="text-2xl font-bold text-slate-800">🔒 Acceso al Sistema</h2>
+            <p class="text-sm text-slate-500 mt-1">ERP Control de Inventario</p>
+        </div>
         
-        <div class="tabs">
-            <div class="tab active" id="tabLogin" onclick="switchTab('login')">Iniciar Sesión</div>
-            <div class="tab" id="tabRegistro" onclick="switchTab('registro')">Nuevo Usuario</div>
+        <!-- Pestañas Corporativas -->
+        <div class="flex bg-slate-100 p-1 rounded-xl mb-6">
+            <button onclick="switchTab('login')" id="tabLogin" class="flex-1 py-2 text-sm font-semibold rounded-lg bg-blue-700 text-white shadow-xs transition">Iniciar Sesión</button>
+            <button onclick="switchTab('registro')" id="tabRegistro" class="flex-1 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition">Nuevo Usuario</button>
         </div>
 
         <!-- FORMULARIO DE LOGIN -->
-        <form id="formLogin" class="form-section active">
-            <div class="form-group">
-                <label>Correo Electrónico:</label>
-                <input type="email" id="login_correo" required placeholder="ejemplo@empresa.com">
+        <form id="formLogin" class="form-section space-y-4">
+            <div>
+                <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Correo Electrónico</label>
+                <input type="email" id="login_correo" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-600 outline-none text-sm transition" required placeholder="ejemplo@empresa.com">
             </div>
-            <div class="form-group">
-                <label>Contraseña:</label>
-                <input type="password" id="login_password" required>
+            <div>
+                <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Contraseña</label>
+                <input type="password" id="login_password" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-600 outline-none text-sm transition" required>
             </div>
-            <button type="submit">Ingresar al ERP</button>
+            <button type="submit" class="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-3 rounded-xl transition shadow-sm mt-2">Ingresar al ERP</button>
         </form>
 
         <!-- FORMULARIO DE REGISTRO -->
-        <form id="formRegistro" class="form-section">
-            <div class="form-group">
-                <label>Nombre Completo:</label>
-                <input type="text" id="reg_nombre" required placeholder="Ej. Luis Rojas">
+        <form id="formRegistro" class="form-section space-y-4 hidden">
+            <div>
+                <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Nombre Completo</label>
+                <input type="text" id="reg_nombre" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-600 outline-none text-sm transition" required placeholder="Ej. Luis Rojas">
             </div>
-            <div class="form-group">
-                <label>Correo Electrónico:</label>
-                <input type="email" id="reg_correo" required>
+            <div>
+                <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Correo Electrónico</label>
+                <input type="email" id="reg_correo" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-600 outline-none text-sm transition" required>
             </div>
-            <div class="form-group">
-                <label>Contraseña:</label>
-                <input type="password" id="reg_password" required minlength="6">
+            <div>
+                <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Contraseña</label>
+                <input type="password" id="reg_password" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-600 outline-none text-sm transition" required minlength="6">
             </div>
-            <button type="submit" style="background-color: #28a745;">Crear Administrador</button>
+            <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl transition shadow-sm mt-2">Crear Administrador</button>
         </form>
     </div>
 
     <script>
-        // Animación de pestañas
         function switchTab(tab) {
-            document.getElementById('tabLogin').classList.remove('active');
-            document.getElementById('tabRegistro').classList.remove('active');
-            document.getElementById('formLogin').classList.remove('active');
-            document.getElementById('formRegistro').classList.remove('active');
+            const tabLogin = document.getElementById('tabLogin');
+            const tabRegistro = document.getElementById('tabRegistro');
+            const formLogin = document.getElementById('formLogin');
+            const formRegistro = document.getElementById('formRegistro');
 
             if(tab === 'login') {
-                document.getElementById('tabLogin').classList.add('active');
-                document.getElementById('formLogin').classList.add('active');
+                tabLogin.className = "flex-1 py-2 text-sm font-semibold rounded-lg bg-blue-700 text-white shadow-xs transition";
+                tabRegistro.className = "flex-1 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition";
+                formLogin.classList.remove('hidden');
+                formRegistro.classList.add('hidden');
             } else {
-                document.getElementById('tabRegistro').classList.add('active');
-                document.getElementById('formRegistro').classList.add('active');
+                tabRegistro.className = "flex-1 py-2 text-sm font-semibold rounded-lg bg-emerald-600 text-white shadow-xs transition";
+                tabLogin.className = "flex-1 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition";
+                formRegistro.classList.remove('hidden');
+                formLogin.classList.add('hidden');
             }
         }
 
-        // 1. REGISTRAR USUARIO
+        // REGISTRAR USUARIO
         document.getElementById('formRegistro').onsubmit = async (e) => {
             e.preventDefault();
             const payload = {
@@ -98,7 +114,7 @@
             }
         };
 
-        // 2. INICIAR SESIÓN Y GUARDAR TOKEN
+        // INICIAR SESIÓN Y GUARDAR TOKEN (Usando erp_token para que coincida con el index)
         document.getElementById('formLogin').onsubmit = async (e) => {
             e.preventDefault();
             const payload = {
@@ -114,12 +130,10 @@
             const data = await res.json();
 
             if (res.ok) {
-                // Guardamos el token de seguridad en la memoria del navegador
                 localStorage.setItem('erp_token', data.token);
                 localStorage.setItem('erp_usuario', data.usuario.nombre);
                 
-                alert('✅ Bienvenido, ' + data.usuario.nombre);
-                window.location.href = 'index.html'; // Nos lleva al panel principal
+                window.location.href = 'index.html';
             } else {
                 alert('❌ Error: ' + data.error);
             }

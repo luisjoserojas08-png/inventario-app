@@ -118,18 +118,17 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-// 3. DASHBOARD
+// 3. DASHBOARD - INVENTARIO POR LOTES
 app.get('/api/inventario-lotes', verificarToken, async (req, res) => {
     try {
         const query = `
-            SELECT p.sku, p.nombre, c.nombre AS categoria_nombre, 
-                   COALESCE(SUM(e.stock_restante), 0) AS stock_restante, 
-                   COALESCE(e.costo_unitario, 0) AS costo_unitario
-            FROM productos p
+            SELECT e.id AS lote_id, p.sku, p.nombre, c.nombre AS categoria_nombre, 
+                   e.stock_restante, e.costo_unitario
+            FROM entradas e
+            JOIN productos p ON e.producto_id = p.id
             LEFT JOIN categorias c ON p.categoria_id = c.id
-            LEFT JOIN entradas e ON p.id = e.producto_id AND e.stock_restante > 0
-            GROUP BY p.id, p.sku, p.nombre, c.nombre, e.costo_unitario
-            ORDER BY p.nombre ASC;
+            WHERE e.stock_restante > 0
+            ORDER BY p.nombre ASC, e.fecha ASC;
         `;
         const resultado = await pool.query(query);
         res.json(resultado.rows);

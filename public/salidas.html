@@ -20,13 +20,15 @@
     <!-- Sidebar -->
     <aside class="w-64 bg-corporate-dark text-slate-300 flex flex-col hidden md:flex">
       <div class="p-6 text-xl font-bold text-white border-b border-slate-800">ERP Genética</div>
-      <nav class="flex-1 p-4 space-y-2">
-        <a href="index.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 transition">📊 Dashboard</a>
-        <a href="entradas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 transition">📥 Registro de Compras</a>
-        <a href="salidas.html" class="block px-4 py-2.5 rounded-lg bg-corporate-primary text-white font-medium transition shadow-xs">📤 Registro de Salidas</a>
-        <a href="categorias.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 transition">🏷️ Categorías</a>
-        <a href="usuarios.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 transition admin-only">👥 Gestión Usuarios</a>
-      </nav>
+<nav class="flex-1 p-4 space-y-2">
+  <a href="index.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 transition">📊 Dashboard Inventario</a>
+  <a href="entradas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 transition">📥 Registro de Compras</a>
+  <a href="salidas.html" class="block px-4 py-2.5 rounded-lg bg-corporate-primary text-white font-medium shadow-xs">📤 Registro de Salidas</a>
+  <a href="reportes.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 transition">📑 Historial y Reportes</a>
+  <a href="categorias.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 transition">🏷️ Categorías</a>
+  <a href="usuarios.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 transition">👥 Gestión de Usuarios</a>
+  <button onclick="descargarReporte()" class="w-full text-left block px-4 py-2.5 rounded-lg hover:bg-slate-800 transition">📑 Descargar Reporte Excel</button>
+</nav>
     </aside>
 
     <!-- Main -->

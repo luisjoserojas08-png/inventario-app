@@ -59,4 +59,59 @@ app.get('/api/productos', async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en el puerto ${PORT}`);
+});// Ruta para listar todas las categorías
+app.get('/api/categorias', async (req, res) => {
+  try {
+    const resultado = await pool.query('SELECT * FROM categorias ORDER BY id ASC');
+    res.json(resultado.rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al obtener las categorías' });
+  }
+});
+
+// Ruta para registrar una entrada de inventario (y sumar stock al producto)
+app.post('/api/entradas', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN'); // Iniciar transacción segura
+
+    const { producto_id, cantidad, costo_unitario } = req.body;
+
+    // 1. Registrar la entrada
+    const nuevaEntrada = await client.query(
+      `INSERT INTO entradas (producto_id, cantidad, costo_unitario) 
+       VALUES ($1, $2, $3) RETURNING *`,
+      [producto_id, cantidad, costo_unitario]
+    );
+
+    // 2. Actualizar el stock actual del producto sumando la cantidad entrante
+    await client.query(
+      `UPDATE productos SET stock_actual = stock_actual + $1 WHERE id = $2`,
+      [cantidad, producto_id]
+    );
+
+    await client.query('COMMIT'); // Confirmar transacción
+    res.status(201).json(nuevaEntrada.rows[0]);
+  } catch (error) {
+    await client.query('ROLLBACK'); // Revertir si hay error
+    console.error(error);
+    res.status(500).json({ error: 'Error al registrar la entrada de inventario' });
+  }
+});
+
+// Ruta para listar el historial de entradas
+app.get('/api/entradas', async (req, res) => {
+  try {
+    const resultado = await pool.query(`
+      SELECT e.id, p.nombre AS producto, e.cantidad, e.costo_unitario, e.fecha 
+      FROM entradas e 
+      JOIN productos p ON e.producto_id = p.id 
+      ORDER BY e.id DESC
+    `);
+    res.json(resultado.rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al obtener el historial de entradas' });
+  }
 });

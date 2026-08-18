@@ -40,16 +40,63 @@ function verificarRol(rolesPermitidos) {
     };
 }
 
-// 1. REGISTRO (Solo Admin)
+// 1. REGISTRO DE USUARIOS (Solo Admin)
 app.post('/api/usuarios', verificarToken, verificarRol(['Administrador']), async (req, res) => {
     const { nombre, correo, password, rol } = req.body;
     try {
         const hashedPassword = await bcrypt.hash(password, 10);
         const query = `INSERT INTO usuarios (nombre, correo, password, rol) VALUES ($1, $2, $3, $4) RETURNING id, nombre, correo, rol`;
-        const nuevoUsuario = await pool.query(query, [nombre, correo, hashedPassword, rol || 'Administrador']);
+        const nuevoUsuario = await pool.query(query, [nombre, correo, hashedPassword, rol || 'Consulta']);
         res.status(201).json({ mensaje: 'Usuario registrado con éxito', usuario: nuevoUsuario.rows[0] });
     } catch (error) {
         res.status(500).json({ error: 'El correo ya está registrado o hubo un error' });
+    }
+});
+
+// LISTAR USUARIOS (Solo Admin)
+app.get('/api/usuarios', verificarToken, verificarRol(['Administrador']), async (req, res) => {
+    try {
+        const resultado = await pool.query('SELECT id, nombre, correo, rol FROM usuarios ORDER BY nombre ASC');
+        res.json(resultado.rows);
+    } catch (error) {
+        res.status(500).json({ error: 'Error al consultar usuarios' });
+    }
+});
+
+// EDITAR USUARIO / RESTABLECER CLAVE (Solo Admin)
+app.put('/api/usuarios/:id', verificarToken, verificarRol(['Administrador']), async (req, res) => {
+    const { id } = req.params;
+    const { nombre, correo, password, rol } = req.body;
+    try {
+        if (password && password.trim() !== "") {
+            const hashedPassword = await bcrypt.hash(password, 10);
+            await pool.query(
+                `UPDATE usuarios SET nombre = $1, correo = $2, password = $3, rol = $4 WHERE id = $5`,
+                [nombre, correo, hashedPassword, rol, id]
+            );
+        } else {
+            await pool.query(
+                `UPDATE usuarios SET nombre = $1, correo = $2, rol = $3 WHERE id = $4`,
+                [nombre, correo, rol, id]
+            );
+        }
+        res.json({ mensaje: 'Usuario actualizado con éxito' });
+    } catch (error) {
+        res.status(500).json({ error: 'Error al actualizar el usuario' });
+    }
+});
+
+// ELIMINAR USUARIO (Solo Admin)
+app.delete('/api/usuarios/:id', verificarToken, verificarRol(['Administrador']), async (req, res) => {
+    const { id } = req.params;
+    try {
+        if (req.user.id == id) {
+            return res.status(400).json({ error: 'No puedes eliminar tu propia cuenta de administrador.' });
+        }
+        await pool.query('DELETE FROM usuarios WHERE id = $1', [id]);
+        res.json({ mensaje: 'Usuario eliminado correctamente' });
+    } catch (error) {
+        res.status(500).json({ error: 'Error al eliminar el usuario' });
     }
 });
 

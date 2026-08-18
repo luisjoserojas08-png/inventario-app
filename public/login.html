@@ -88,7 +88,7 @@
             }
         }
 
-        // REGISTRAR USUARIO
+        // 1. REGISTRAR USUARIO
         document.getElementById('formRegistro').onsubmit = async (e) => {
             e.preventDefault();
             const payload = {
@@ -98,23 +98,28 @@
                 rol: 'Administrador'
             };
 
-            const res = await fetch('/api/usuarios', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            const data = await res.json();
+            try {
+                const res = await fetch('/api/usuarios', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
 
-            if (res.ok) {
-                alert('✅ ' + data.mensaje + '. Ya puedes iniciar sesión.');
-                document.getElementById('formRegistro').reset();
-                switchTab('login');
-            } else {
-                alert('❌ Error: ' + data.error);
+                if (res.ok) {
+                    alert('✅ ' + data.mensaje + '. Ya puedes iniciar sesión.');
+                    document.getElementById('formRegistro').reset();
+                    switchTab('login');
+                } else {
+                    alert('❌ Error: ' + (data.error || 'No se pudo registrar'));
+                }
+            } catch (err) {
+                console.error("Error en registro:", err);
+                alert('❌ Error de conexión con el servidor');
             }
         };
 
-        // INICIAR SESIÓN Y GUARDAR TOKEN (Usando erp_token para que coincida con el index)
+        // 2. INICIAR SESIÓN (Con doble almacenamiento para evitar bucles)
         document.getElementById('formLogin').onsubmit = async (e) => {
             e.preventDefault();
             const payload = {
@@ -122,20 +127,30 @@
                 password: document.getElementById('login_password').value
             };
 
-            const res = await fetch('/api/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            const data = await res.json();
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
 
-            if (res.ok) {
-                localStorage.setItem('erp_token', data.token);
-                localStorage.setItem('erp_usuario', data.usuario.nombre);
-                
-                window.location.href = 'index.html';
-            } else {
-                alert('❌ Error: ' + data.error);
+                if (res.ok && data.token) {
+                    // Guardamos con ambas llaves por compatibilidad absoluta
+                    localStorage.setItem('erp_token', data.token);
+                    localStorage.setItem('token', data.token);
+                    
+                    if (data.usuario && data.usuario.nombre) {
+                        localStorage.setItem('erp_usuario', data.usuario.nombre);
+                    }
+                    
+                    window.location.href = 'index.html';
+                } else {
+                    alert('❌ Error: ' + (data.error || 'Credenciales incorrectas'));
+                }
+            } catch (err) {
+                console.error("Error en login:", err);
+                alert('❌ Error de conexión con el servidor');
             }
         };
     </script>

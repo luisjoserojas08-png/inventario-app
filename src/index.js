@@ -61,7 +61,7 @@ async function descontarStock(client, producto_id, cantidad) {
 
     for (let lote of lotes.rows) {
         if (cantPendiente <= 0) break;
-        if (!primerLoteAfectado) primerLoteAfectado = lote.id; // Capturamos el lote principal de salida
+        if (!primerLoteAfectado) primerLoteAfectado = lote.id;
 
         let aDescontar = Math.min(parseFloat(lote.stock_restante), cantPendiente);
         
@@ -196,7 +196,6 @@ app.get('/api/productos', verificarToken, async (req, res) => {
     }
 });
 
-// ESTA ES LA RUTA QUE FALTABA PARA EL DASHBOARD
 app.get('/api/inventario-lotes', verificarToken, async (req, res) => {
     try {
         const query = `SELECT e.id AS lote_id, p.sku, p.nombre, p.unidad_medida, c.nombre AS categoria_nombre, c.almacen, e.stock_restante, e.costo_unitario FROM entradas e JOIN productos p ON e.producto_id = p.id LEFT JOIN categorias c ON p.categoria_id = c.id WHERE e.stock_restante > 0 ORDER BY p.nombre ASC, e.fecha ASC;`;
@@ -238,7 +237,6 @@ app.post('/api/entradas', verificarToken, verificarRol(['Administrador', 'Superv
 
         await client.query('UPDATE productos SET stock_actual = stock_actual + $1 WHERE id = $2', [cantidadNumerica, req.body.producto_id]);
         
-        // AQUI AÑADIMOS EL USUARIO (req.user.id)
         await client.query('INSERT INTO entradas (producto_id, cantidad, costo_unitario, stock_restante, fecha, usuario_id) VALUES ($1, $2, $3, $4, $5, $6)', 
             [req.body.producto_id, cantidadNumerica, costoNumerico, cantidadNumerica, fechaTransaccion, req.user.id]);
         
@@ -256,7 +254,6 @@ app.post('/api/salidas', verificarToken, verificarRol(['Administrador', 'Supervi
 
         const loteOrigenId = await descontarStock(client, req.body.producto_id, cantidadNumerica);
 
-        // AQUI AÑADIMOS EL USUARIO (req.user.id)
         await client.query('INSERT INTO salidas (producto_id, cantidad, concepto, fecha, lote_origen_id, centro_costo_id, usuario_id) VALUES ($1, $2, $3, $4, $5, $6, $7)', 
             [req.body.producto_id, cantidadNumerica, req.body.concepto, fechaTransaccion, loteOrigenId, centroCostoId, req.user.id]);
         
@@ -283,16 +280,11 @@ app.put('/api/admin/movimientos/:tipo/:id', verificarToken, verificarRol(['Admin
         const diferencia = nueva_cantidad - parseFloat(mov.cantidad);
 
         if (tipo === 'entrada') {
-            // BLINDAJE: ¿Cuántas unidades de este lote ya salieron?
             const consumido = parseFloat(mov.cantidad) - parseFloat(mov.stock_restante);
-            
-            // No permitir reducir la entrada a una cantidad menor de lo que ya se gastó
             if (nueva_cantidad < consumido) {
                 throw new Error(`BLINDAJE CONTABLE: Este lote ya tiene ${consumido.toFixed(2)} unidades consumidas en salidas. No puedes reducir su cantidad a menos de eso.`);
             }
-            
             await client.query('UPDATE entradas SET cantidad = $1, stock_restante = $1 - $2 WHERE id = $3', [nueva_cantidad, consumido, id]);
-            // Ajustar el stock general del producto
             await client.query('UPDATE productos SET stock_actual = stock_actual + $1 WHERE id = $2', [diferencia, mov.producto_id]);
         } else {
             if (diferencia > 0) await descontarStock(client, mov.producto_id, diferencia);
@@ -318,12 +310,9 @@ app.delete('/api/admin/movimientos/:tipo/:id', verificarToken, verificarRol(['Ad
         const mov = reg.rows[0];
 
         if (tabla === 'entradas') {
-            // BLINDAJE: Si el stock restante es menor que la cantidad original, ya hubo salidas de este lote.
             if (parseFloat(mov.cantidad) > parseFloat(mov.stock_restante)) {
                 throw new Error('BLINDAJE CONTABLE: Este lote ya fue utilizado en una o varias salidas. Debes ubicar y eliminar las salidas asociadas a este producto antes de poder borrar la entrada.');
             }
-            
-            // Si está intacto (nadie lo ha consumido), lo podemos borrar, pero hay que restar ese inventario falso del producto general.
             await client.query('UPDATE productos SET stock_actual = stock_actual - $1 WHERE id = $2', [mov.cantidad, mov.producto_id]);
         }
 
@@ -339,7 +328,36 @@ app.delete('/api/admin/movimientos/:tipo/:id', verificarToken, verificarRol(['Ad
 });
 
 // ==========================================
-// DESCARGA DE HISTORIALES (ENTRADAS Y SALIDAS) CON ESTILO CORPORATIVO
+// REPORTES HISTÓRICOS Y EXCEL CON FILTROS
+// ==========================================
+app.get('/api/reporte/logs', verificarToken, verificarRol(['Administrador']), async (req, res) => {
+    try { res.json((await pool.query('SELECT l.*, u.nombre AS usuario_nombre FROM logs_auditoria l JOIN usuarios u ON l.usuario_id = u.id ORDER BY l.fecha DESC LIMIT 100')).rows); } catch (error) { res.status(500).json({ error: 'Error' }); }
+});
+
+app.get('/api/reporte/entradas', verificarToken, async (req, res) => {
+    const { inicio, fin } = req.query;
+    let query = `SELECT e.id, p.sku, p.nombre AS producto_nombre, p.unidad_medida, c.almacen, e.cantidad, e.costo_unitario, e.stock_restante, e.fecha FROM entradas e JOIN productos p ON e.producto_id = p.id LEFT JOIN categorias c ON p.categoria_id = c.id`;
+    let params = [];
+    if (inicio && fin) {
+        query += ` WHERE e.fecha >= $1 AND e.fecha <= $2`;
+        params.push(new Date(inicio), new Date(`${fin}T23:59:59.999Z`));
+    }
+    query += ` ORDER BY e.fecha DESC;`;
+    try { res.json((await pool.query(query, params)).rows); } catch (error) { res.status(500).json({ error: 'Error al consultar' }); }
+});
+
+app.get('/api/reporte/salidas', verificarToken, async (req, res) => {
+    const { inicio, fin } = req.query;
+    let query = `SELECT s.id, p.sku, p.nombre AS producto_nombre, p.unidad_medida, c.almacen, s.cantidad, s.concepto, s.fecha, s.lote_origen_id FROM salidas s JOIN productos p ON s.producto_id = p.id LEFT JOIN categorias c ON p.categoria_id = c.id`;
+    let params = [];
+    if (inicio && fin) {
+        query += ` WHERE s.fecha >= $1 AND s.fecha <= $2`;
+        params.push(new Date(inicio), new Date(`${fin}T23:59:59.999Z`));
+    }
+    query += ` ORDER BY s.fecha DESC;`;
+    try { res.json((await pool.query(query, params)).rows); } catch (error) { res.status(500).json({ error: 'Error al consultar' }); }
+});
+
 app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => {
     const { tipo, inicio, fin } = req.query;
     try {
@@ -387,12 +405,11 @@ app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => 
                 categoria_nombre: r.categoria_nombre || 'Sin Categoría',
                 cc_codigo: r.cc_codigo || 'N/A',
                 cc_nombre: r.cc_nombre || 'Sin Centro',
-                usuario_nombre: r.usuario_nombre || 'Sistema / Previo', // Mostrará Sistema si fue creado antes de este ajuste
+                usuario_nombre: r.usuario_nombre || 'Sistema / Previo',
                 fecha: new Date(r.fecha).toLocaleString('es-VE', { timeZone: 'America/Caracas' }) 
             });
         });
 
-        // DISEÑO CORPORATIVO Y FILTROS AUTOMÁTICOS
         worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
         worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } }; 
         worksheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
@@ -403,3 +420,72 @@ app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => 
         await workbook.xlsx.write(res); res.end();
     } catch (error) { res.status(500).json({ error: 'Error al generar excel' }); }
 });
+
+app.get('/api/reporte-salidas', verificarToken, async (req, res) => {
+    try {
+        const workbook = new ExcelJS.Workbook(); const worksheet = workbook.addWorksheet('Stock General');
+        
+        worksheet.columns = [
+            { header: 'Lote ID', key: 'lote_id', width: 12 }, { header: 'SKU', key: 'sku', width: 15 }, 
+            { header: 'Producto', key: 'nombre', width: 35 }, { header: 'Categoría', key: 'categoria_nombre', width: 20 }, 
+            { header: 'Almacén', key: 'almacen', width: 25 }, { header: 'Stock Restante', key: 'stock_restante', width: 18 }, 
+            { header: 'UoM', key: 'unidad_medida', width: 10 }, { header: 'Costo Unitario ($)', key: 'costo_unitario', width: 18 },
+            { header: 'Valorización Total ($)', key: 'valor_total', width: 20 }, { header: 'Fecha de Ingreso', key: 'fecha', width: 25 }
+        ];
+
+        const query = `SELECT e.id, p.sku, p.nombre, p.unidad_medida, c.nombre AS categoria_nombre, c.almacen, e.stock_restante, e.costo_unitario, e.fecha 
+                       FROM entradas e JOIN productos p ON e.producto_id = p.id LEFT JOIN categorias c ON p.categoria_id = c.id 
+                       WHERE e.stock_restante > 0 ORDER BY c.almacen, p.nombre`;
+        
+        const resultado = await pool.query(query);
+
+        resultado.rows.forEach(r => {
+            worksheet.addRow({
+                ...r,
+                lote_id: `LOT-${String(r.id).padStart(3, '0')}`,
+                categoria_nombre: r.categoria_nombre || 'Sin Categoría',
+                valor_total: (parseFloat(r.stock_restante) * parseFloat(r.costo_unitario)).toFixed(2),
+                fecha: new Date(r.fecha).toLocaleString('es-VE', { timeZone: 'America/Caracas' })
+            });
+        });
+
+        worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+        worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } }; 
+        worksheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
+        worksheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: worksheet.columns.length } };
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); 
+        res.setHeader('Content-Disposition', 'attachment; filename="Inventario_Actual_Genetica.xlsx"');
+        await workbook.xlsx.write(res); res.end();
+    } catch (error) { res.status(500).json({ error: 'Error' }); }
+});
+
+// ==========================================
+// CARGA MASIVA EXCEL
+// ==========================================
+app.post('/api/cargar-masiva/:tipo', verificarToken, verificarRol(['Administrador']), upload.single('file'), async (req, res) => {
+    const { tipo } = req.params;
+    const workbook = xlsx.readFile(req.file.path);
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const data = xlsx.utils.sheet_to_json(sheet);
+    const client = await pool.connect();
+    
+    try {
+        await client.query('BEGIN');
+        for (let row of data) {
+            if (tipo === 'productos') {
+                await client.query('INSERT INTO productos (sku, nombre, categoria_id, unidad_medida) VALUES ($1, $2, $3, $4)', [row.SKU, row.NOMBRE, row.CATEGORIA_ID, row.UOM]);
+            } else if (tipo === 'categorias') {
+                await client.query('INSERT INTO categorias (nombre, almacen) VALUES ($1, $2)', [row.NOMBRE, row.ALMACEN]);
+            } else if (tipo === 'inventario') {
+                await client.query('INSERT INTO entradas (producto_id, cantidad, costo_unitario, stock_restante, fecha, usuario_id) VALUES ($1, $2, $3, $4, NOW(), $5)', [row.PRODUCTO_ID, row.CANTIDAD, row.COSTO, row.CANTIDAD, req.user.id]);
+                await client.query('UPDATE productos SET stock_actual = stock_actual + $1 WHERE id = $2', [row.CANTIDAD, row.PRODUCTO_ID]);
+            }
+        }
+        await client.query('COMMIT');
+        res.json({ mensaje: `Carga masiva de ${tipo} completada` });
+    } catch (e) { await client.query('ROLLBACK'); res.status(500).json({ error: e.message }); } finally { client.release(); }
+});
+
+// ESTA ES LA LÍNEA QUE FALTABA (LA QUE MANTIENE EL SERVIDOR ENCENDIDO)
+app.listen(PORT, () => console.log(`Servidor activo en puerto ${PORT}`));

@@ -155,6 +155,22 @@ app.get('/api/categorias', verificarToken, async (req, res) => {
 });
 
 // ==========================================
+// CENTROS DE COSTO
+// ==========================================
+app.post('/api/centros-costo', verificarToken, verificarRol(['Administrador']), async (req, res) => {
+    try {
+        const resultado = await pool.query(`INSERT INTO centros_costo (codigo, nombre) VALUES ($1, $2) RETURNING *`, [req.body.codigo, req.body.nombre]);
+        res.status(201).json({ mensaje: 'Centro de Costo registrado', centro: resultado.rows[0] });
+    } catch (error) {
+        if (error.code === '23505') return res.status(400).json({ error: 'Ese código ya existe' });
+        res.status(500).json({ error: 'Error al registrar centro de costo' });
+    }
+});
+app.get('/api/centros-costo', verificarToken, async (req, res) => {
+    try { res.json((await pool.query('SELECT * FROM centros_costo ORDER BY codigo ASC')).rows); } catch (e) { res.status(500).json({ error: 'Error' }); }
+});
+
+// ==========================================
 // PRODUCTOS Y DASHBOARD
 // ==========================================
 app.post('/api/productos', verificarToken, verificarRol(['Administrador', 'Supervisor']), async (req, res) => {
@@ -169,9 +185,13 @@ app.post('/api/productos', verificarToken, verificarRol(['Administrador', 'Super
 });
 
 app.get('/api/productos', verificarToken, async (req, res) => {
-    try { res.json((await pool.query('SELECT id, sku, nombre, unidad_medida FROM productos ORDER BY nombre ASC')).rows); } catch (e) { res.status(500).json({ error: 'Error' }); }
+    try { 
+        // Agregamos stock_actual a la consulta
+        res.json((await pool.query('SELECT id, sku, nombre, unidad_medida, stock_actual FROM productos ORDER BY nombre ASC')).rows); 
+    } catch (e) { 
+        res.status(500).json({ error: 'Error' }); 
+    }
 });
-
 app.get('/api/inventario-lotes', verificarToken, async (req, res) => {
     try {
         const query = `SELECT e.id AS lote_id, p.sku, p.nombre, p.unidad_medida, c.nombre AS categoria_nombre, c.almacen, e.stock_restante, e.costo_unitario FROM entradas e JOIN productos p ON e.producto_id = p.id LEFT JOIN categorias c ON p.categoria_id = c.id WHERE e.stock_restante > 0 ORDER BY p.nombre ASC, e.fecha ASC;`;
@@ -204,21 +224,15 @@ app.post('/api/salidas', verificarToken, verificarRol(['Administrador', 'Supervi
         await client.query('BEGIN');
         const fechaTransaccion = req.body.fecha || new Date().toISOString();
         const cantidadNumerica = parseFloat(req.body.cantidad);
+        const centroCostoId = req.body.centro_costo_id ? parseInt(req.body.centro_costo_id) : null;
 
-        // Obtenemos el lote origen gracias a FIFO
         const loteOrigenId = await descontarStock(client, req.body.producto_id, cantidadNumerica);
 
-        await client.query('INSERT INTO salidas (producto_id, cantidad, concepto, fecha, lote_origen_id) VALUES ($1, $2, $3, $4, $5)', 
-            [req.body.producto_id, cantidadNumerica, req.body.concepto, fechaTransaccion, loteOrigenId]);
+        await client.query('INSERT INTO salidas (producto_id, cantidad, concepto, fecha, lote_origen_id, centro_costo_id) VALUES ($1, $2, $3, $4, $5, $6)', 
+            [req.body.producto_id, cantidadNumerica, req.body.concepto, fechaTransaccion, loteOrigenId, centroCostoId]);
         
-        await client.query('COMMIT'); 
-        res.status(201).json({ mensaje: 'Salida registrada correctamente' });
-    } catch (error) { 
-        await client.query('ROLLBACK'); 
-        res.status(400).json({ error: error.message }); 
-    } finally { 
-        client.release(); 
-    }
+        await client.query('COMMIT'); res.status(201).json({ mensaje: 'Salida registrada correctamente' });
+    } catch (error) { await client.query('ROLLBACK'); res.status(400).json({ error: error.message }); } finally { client.release(); }
 });
 // ==========================================
 // ADMIN: EDICIÓN Y BORRADO (CON BLINDAJE CONTABLE)

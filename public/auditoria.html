@@ -14,11 +14,14 @@
   <script>
     const token = localStorage.getItem('erp_token') || localStorage.getItem('token');
     if (!token) window.location.href = 'login.html';
-    function parseJwt(t) { try { return JSON.parse(atob(t.split('.')[1])); } catch (e) { return null; } }
+    
+    function parseJwt(t) { 
+      try { return JSON.parse(atob(t.split('.')[1])); } catch (e) { return null; } 
+    }
     const currentUser = parseJwt(token);
     if (!currentUser || currentUser.rol !== 'Administrador') {
-        alert('Acceso denegado: Vista exclusiva para Administradores.');
-        window.location.href = 'index.html';
+      alert('Acceso denegado: Vista exclusiva para Administradores.');
+      window.location.href = 'index.html';
     }
   </script>
 
@@ -47,13 +50,13 @@
       </header>
 
       <main class="p-8">
-        <!-- Pestañas de Navegación Interna -->
+        <!-- Pestañas -->
         <div class="flex space-x-3 mb-6">
           <button id="btn-tab-gestion" onclick="mostrarTab('gestion')" class="px-5 py-2.5 rounded-lg font-medium text-sm bg-corporate-primary text-white shadow-xs transition">Gestión y Borrado de Movimientos</button>
           <button id="btn-tab-logs" onclick="mostrarTab('logs')" class="px-5 py-2.5 rounded-lg font-medium text-sm bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 transition">Historial de Logs (Auditoría)</button>
         </div>
 
-        <!-- Vista 1: Gestión (Entradas y Salidas con botón de borrar) -->
+        <!-- Vista 1: Gestión de Movimientos -->
         <div id="contenedor-gestion" class="bg-white rounded-xl border border-corporate-border shadow-xs overflow-hidden">
           <div class="px-6 py-4 border-b bg-slate-50 flex justify-between items-center">
             <h3 class="font-bold text-slate-700">Movimientos Registrados (Control de Borrado)</h3>
@@ -78,7 +81,7 @@
           </div>
         </div>
 
-        <!-- Vista 2: Logs (Oculta por defecto) -->
+        <!-- Vista 2: Logs de Auditoría -->
         <div id="contenedor-logs" class="hidden bg-white rounded-xl border border-corporate-border shadow-xs overflow-hidden">
           <div class="px-6 py-4 border-b bg-slate-50 flex justify-between items-center">
             <h3 class="font-bold text-slate-700">Registro de Cambios y Eliminaciones Sensibles</h3>
@@ -101,20 +104,23 @@
             </table>
           </div>
         </div>
-
       </main>
     </div>
   </div>
 
   <script>
-    const token = localStorage.getItem('erp_token') || localStorage.getItem('token');
-
     async function descargarReporte() {
-      const res = await fetch('/api/reporte-salidas', { headers: { 'Authorization': `Bearer ${token}` } });
-      const blob = await res.blob();
-      const a = document.createElement('a');
-      a.href = window.URL.createObjectURL(blob); a.download = 'reporte_inventario_general.xlsx';
-      a.click();
+      try {
+        const res = await fetch('/api/reporte-salidas', { headers: { 'Authorization': `Bearer ${token}` } });
+        if (!res.ok) return alert("Error al descargar excel.");
+        const blob = await res.blob();
+        const a = document.createElement('a');
+        a.href = window.URL.createObjectURL(blob);
+        a.download = 'reporte_inventario_general.xlsx';
+        a.click();
+      } catch (e) {
+        alert("Error de conexión al descargar.");
+      }
     }
 
     function mostrarTab(tab) {
@@ -135,7 +141,7 @@
     }
 
     async function eliminarMovimiento(tipo, id) {
-      if (!confirm(`⚠️ ADVERTENCIA: ¿Estás seguro de eliminar este registro de ${tipo}? Si es una salida, el stock se devolverá automáticamente y la acción quedará registrada en el log de auditoría.`)) return;
+      if (!confirm(`⚠️ ¿Estás seguro de eliminar este registro de ${tipo}? Si es una salida, el stock volverá al inventario y el movimiento quedará registrado en auditoría.`)) return;
       
       try {
         const res = await fetch(`/api/admin/movimientos/${tipo}/${id}`, {
@@ -144,15 +150,17 @@
         });
         const data = await res.json();
         if (res.ok) {
-          alert('✅ Registro eliminado y stock ajustado correctamente.');
+          alert('✅ Registro eliminado correctamente.');
           cargarGestion();
         } else {
           alert(`❌ Error: ${data.error}`);
         }
-      } catch (err) { alert('Error de conexión con el servidor.'); }
+      } catch (err) {
+        alert('Error de conexión con el servidor.');
+      }
     }
 
-async function cargarGestion() {
+    async function cargarGestion() {
       const tbody = document.getElementById('tabla-gestion');
       try {
         const [resEntradas, resSalidas] = await Promise.all([
@@ -163,52 +171,51 @@ async function cargarGestion() {
         const entradas = await resEntradas.json();
         const salidas = await resSalidas.json();
 
-        // VALIDACIÓN: Si el backend devuelve un error, lo mostramos en la tabla
         if (entradas.error || salidas.error) {
-           tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-6 text-center font-bold text-red-500">Error del servidor: ${entradas.error || salidas.error}. <br> <span class="text-slate-500 font-normal">¿Ejecutaste el código SQL en Neon DB?</span></td></tr>`;
-           return;
+          tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-6 text-center font-semibold text-red-500">Error del servidor: ${entradas.error || salidas.error}</td></tr>`;
+          return;
         }
 
-        const filasEntradas = entradas.map(e => `
+        const filasEntradas = (Array.isArray(entradas) ? entradas : []).map(e => `
           <tr class="hover:bg-slate-50 transition">
             <td class="px-6 py-4 font-semibold text-emerald-600">ENTRADA</td>
             <td class="px-6 py-4">${e.producto_nombre} <br><span class="text-xs text-slate-400">SKU: ${e.sku}</span></td>
             <td class="px-6 py-4">${e.almacen || 'Principal'}</td>
-            <td class="px-6 py-4 font-bold">+${e.cantidad} ${e.unidad_medida}</td>
-            <td class="px-6 py-4 text-xs text-slate-500">Costo U: $${e.costo_unitario} <br>Fecha: ${new Date(e.fecha).toLocaleString()}</td>
+            <td class="px-6 py-4 font-bold text-emerald-700">+${e.cantidad} ${e.unidad_medida || 'uds'}</td>
+            <td class="px-6 py-4 text-xs text-slate-500">Costo U: $${Number(e.costo_unitario).toFixed(2)} <br>Fecha: ${new Date(e.fecha).toLocaleString()}</td>
             <td class="px-6 py-4 text-center">
-              <button onclick="eliminarMovimiento('entrada', ${e.id})" class="bg-red-50 text-red-600 hover:bg-red-100 px-3 py-1.5 rounded-lg text-xs font-medium transition">Borrar</button>
+              <button onclick="eliminarMovimiento('entrada', ${e.id})" class="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-lg text-xs font-medium transition">Borrar</button>
             </td>
           </tr>
         `);
 
-        const filasSalidas = salidas.map(s => `
+        const filasSalidas = (Array.isArray(salidas) ? salidas : []).map(s => `
           <tr class="hover:bg-slate-50 transition">
             <td class="px-6 py-4 font-semibold text-red-600">SALIDA</td>
             <td class="px-6 py-4">${s.producto_nombre} <br><span class="text-xs text-slate-400">SKU: ${s.sku}</span></td>
             <td class="px-6 py-4">${s.almacen || 'Principal'}</td>
-            <td class="px-6 py-4 font-bold">-${s.cantidad} ${s.unidad_medida}</td>
+            <td class="px-6 py-4 font-bold text-red-700">-${s.cantidad} ${s.unidad_medida || 'uds'}</td>
             <td class="px-6 py-4 text-xs text-slate-500">Concepto: ${s.concepto} <br>Fecha: ${new Date(s.fecha).toLocaleString()}</td>
             <td class="px-6 py-4 text-center">
-              <button onclick="eliminarMovimiento('salida', ${s.id})" class="bg-red-50 text-red-600 hover:bg-red-100 px-3 py-1.5 rounded-lg text-xs font-medium transition">Borrar</button>
+              <button onclick="eliminarMovimiento('salida', ${s.id})" class="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-lg text-xs font-medium transition">Borrar</button>
             </td>
           </tr>
         `);
 
         const combinadas = [...filasEntradas, ...filasSalidas];
         tbody.innerHTML = combinadas.length ? combinadas.join('') : `<tr><td colspan="6" class="px-6 py-6 text-center text-slate-400">No hay movimientos registrados.</td></tr>`;
-      } catch (err) { 
-        tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-6 text-center font-bold text-red-500">Error de conexión con el servidor. Revisar logs.</td></tr>`;
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-6 text-center text-red-500 font-semibold">Error al cargar movimientos.</td></tr>`;
       }
     }
 
     async function cargarLogs() {
+      const tbody = document.getElementById('tabla-logs');
       try {
         const res = await fetch('/api/reporte/logs', { headers: { 'Authorization': `Bearer ${token}` } });
         const logs = await res.json();
-        const tbody = document.getElementById('tabla-logs');
 
-        if (!logs.length) {
+        if (!Array.isArray(logs) || !logs.length) {
           tbody.innerHTML = `<tr><td colspan="5" class="px-6 py-6 text-center text-slate-400">No hay registros de auditoría.</td></tr>`;
           return;
         }
@@ -222,7 +229,9 @@ async function cargarGestion() {
             <td class="px-6 py-4 font-mono text-xs text-slate-500 truncate max-w-xs" title='${l.detalles}'>${l.detalles}</td>
           </tr>
         `).join('');
-      } catch (err) { console.error("Error al cargar logs", err); }
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="5" class="px-6 py-6 text-center text-red-500 font-semibold">Error al cargar logs.</td></tr>`;
+      }
     }
 
     cargarGestion();

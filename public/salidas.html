@@ -20,20 +20,20 @@
 
   <div class="flex h-screen overflow-hidden">
     <!-- Sidebar -->
-    <aside class="w-64 bg-corporate-dark text-slate-300 flex flex-col hidden md:flex">
-        <div class="p-6 text-xl font-bold text-white tracking-wider border-b border-slate-800">ERP Genética</div>
-        <nav class="flex-1 p-4 space-y-2">
-          <a href="index.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📊 Dashboard Inventario</a>
-          <a href="entradas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📥 Registro de Compras</a>
-          <a href="salidas.html" class="block px-4 py-2.5 rounded-lg bg-corporate-primary text-white font-medium shadow-xs">📤 Registro de Salidas</a>
-          <a href="reportes.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📑 Historial y Reportes</a>
-          <a href="categorias.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🏷️ Categorías y Almacén</a>
-          <a href="carga.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📂 Carga Masiva</a>
-          <a href="usuarios.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">👥 Gestión de Usuarios</a>
-          <a href="auditoria.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🛡️ Auditoría del Sistema</a>
-          <button onclick="descargarReporteGlobal()" class="w-full text-left block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition mt-4 border-t border-slate-700 pt-4">📑 Bajar Stock Actual</button>
-        </nav>
-        <div class="p-4 border-t border-slate-800 text-xs text-slate-500">Sesión Activa • Neon DB</div>
+   <aside class="w-64 bg-corporate-dark text-slate-300 flex flex-col hidden md:flex">
+      <div class="p-6 text-xl font-bold text-white tracking-wider border-b border-slate-800">ERP Genética</div>
+      <nav class="flex-1 p-4 space-y-2 overflow-y-auto">
+        <a href="index.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📊 Dashboard Inventario</a>
+        <a href="productos.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📦 Maestro de Productos</a>
+        <a href="entradas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📥 Registro de Compras</a>
+        <a href="salidas.html" class="block px-4 py-2.5 rounded-lg bg-corporate-primary text-white font-medium shadow-xs">📤 Registro de Salidas</a>
+        <a href="reportes.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📑 Historial y Reportes</a>
+        <a href="categorias.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🏷️ Categorías y Almacén</a>
+        <a href="carga.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📂 Carga Masiva</a>
+        <a href="usuarios.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">👥 Gestión de Usuarios</a>
+        <a href="auditoria.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🛡️ Auditoría del Sistema</a>
+      </nav>
+      <div class="p-4 border-t border-slate-800 text-xs text-slate-500">Sesión Activa • Neon DB</div>
     </aside>
 
     <div class="flex-1 flex flex-col overflow-y-auto">
@@ -95,12 +95,31 @@
         a.href = window.URL.createObjectURL(blob); a.download = 'inventario_actual.xlsx';
         a.click();
     }
+let productosData = []; // Variable global para guardar los datos
 
     async function cargarProductos() {
         try {
             const res = await fetch('/api/productos', { headers: { 'Authorization': `Bearer ${token}` } });
-            const p = await res.json();
-            document.getElementById('producto_id').innerHTML = p.map(x => `<option value="${x.id}">${x.nombre} - SKU: ${x.sku} [Medida: ${x.unidad_medida}]</option>`).join('');
+            productosData = await res.json();
+            const select = document.getElementById('producto_id');
+            
+            // 1. Mostrar el stock en la lista desplegable
+            select.innerHTML = '<option value="">-- Seleccione un producto --</option>' + 
+                productosData.map(x => `<option value="${x.id}">${x.nombre} - SKU: ${x.sku} [Disp: ${Number(x.stock_actual).toFixed(2)} ${x.unidad_medida}]</option>`).join('');
+            
+            // 2. Blindaje: Ajustar el límite máximo cuando se elige un producto
+            select.addEventListener('change', (e) => {
+                const prod = productosData.find(p => p.id == e.target.value);
+                const inputCant = document.getElementById('cantidad');
+                
+                if (prod) {
+                    inputCant.max = prod.stock_actual; // Bloquea el input
+                    inputCant.placeholder = `Máximo disponible: ${Number(prod.stock_actual).toFixed(2)}`;
+                } else {
+                    inputCant.removeAttribute('max');
+                    inputCant.placeholder = "Ej: 5.50";
+                }
+            });
         } catch (e) { console.error("Error al cargar productos", e); }
     }
 

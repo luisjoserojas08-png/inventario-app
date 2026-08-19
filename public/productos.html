@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERP - Maestro de Productos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = { theme: { extend: { colors: { corporate: { dark: '#0f172a', primary: '#1e40af', light: '#f8fafc', border: '#e2e8f0' } } } } }
+    </script>
+</head>
+<body class="bg-corporate-light font-sans text-slate-800 subpixel-antialiased">
+
+  <script>
+    const token = localStorage.getItem('erp_token') || localStorage.getItem('token');
+    if (!token) window.location.href = 'login.html';
+    function parseJwt(t) { try { return JSON.parse(atob(t.split('.')[1])); } catch (e) { return null; } }
+    const currentUser = parseJwt(token);
+  </script>
+
+  <div class="flex h-screen overflow-hidden">
+    <!-- Sidebar -->
+    <aside class="w-64 bg-corporate-dark text-slate-300 flex flex-col hidden md:flex">
+      <div class="p-6 text-xl font-bold text-white tracking-wider border-b border-slate-800">ERP Genética</div>
+      <nav class="flex-1 p-4 space-y-2 overflow-y-auto">
+        <a href="index.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📊 Dashboard Inventario</a>
+        <a href="productos.html" class="block px-4 py-2.5 rounded-lg bg-corporate-primary text-white font-medium shadow-xs">📦 Maestro de Productos</a>
+        <a href="entradas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📥 Registro de Compras</a>
+        <a href="salidas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📤 Registro de Salidas</a>
+        <a href="reportes.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📑 Historial y Reportes</a>
+        <a href="categorias.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🏷️ Categorías y Almacén</a>
+        <a href="carga.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📂 Carga Masiva</a>
+        <a href="usuarios.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">👥 Gestión de Usuarios</a>
+        <a href="auditoria.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🛡️ Auditoría del Sistema</a>
+      </nav>
+    </aside>
+
+    <div class="flex-1 flex flex-col overflow-y-auto">
+      <header class="bg-white border-b h-16 flex items-center justify-between px-8 shadow-xs">
+        <h1 class="text-lg font-semibold text-slate-700">Catálogo Maestro de Productos</h1>
+        <button onclick="localStorage.clear(); window.location.href='login.html'" class="text-sm text-red-600 font-medium bg-red-50 px-3 py-1.5 rounded-lg">Cerrar Sesión</button>
+      </header>
+
+      <main class="p-8 flex flex-col lg:flex-row gap-8">
+        
+        <!-- Formulario (Izquierda) -->
+        <div class="w-full lg:w-1/3 bg-white rounded-xl border border-corporate-border p-6 shadow-xs h-fit sticky top-8">
+          <h3 class="font-bold text-slate-700 border-b pb-3 mb-5" id="form-titulo">Crear Nuevo Producto</h3>
+          <form id="form-producto" class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium mb-1">Código SKU</label>
+              <input type="text" id="sku" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary uppercase">
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1">Nombre del Producto</label>
+              <input type="text" id="nombre-prod" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary">
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1">Unidad de Medida (UoM)</label>
+              <select id="unidad_medida" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary">
+                <option value="und">Unidades (und)</option>
+                <option value="kg">Kilogramos (kg)</option>
+                <option value="g">Gramos (g)</option>
+                <option value="L">Litros (L)</option>
+                <option value="ml">Mililitros (ml)</option>
+                <option value="m">Metros (m)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1">Categoría</label>
+              <select id="categoria_id" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary"></select>
+            </div>
+            <div id="msg-producto" class="hidden px-4 py-3 rounded-lg text-sm font-medium mt-4"></div>
+            <button type="submit" id="btn-submit" class="w-full bg-corporate-primary text-white py-2.5 rounded-lg font-medium transition shadow-xs">Guardar Producto</button>
+            <button type="button" onclick="cancelarEdicion()" id="btn-cancelar" class="hidden w-full mt-2 bg-slate-100 text-slate-600 py-2.5 rounded-lg font-medium hover:bg-slate-200 transition">Cancelar Edición</button>
+          </form>
+        </div>
+
+        <!-- Tabla (Derecha) -->
+        <div class="flex-1 bg-white rounded-xl border border-corporate-border shadow-xs overflow-hidden">
+          <div class="px-6 py-4 border-b bg-slate-50 flex justify-between items-center">
+            <h3 class="font-bold text-slate-700">Productos Registrados</h3>
+          </div>
+          <div class="overflow-x-auto max-h-[75vh]">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b sticky top-0 shadow-sm">
+                  <th class="px-6 py-3 bg-slate-50">SKU</th>
+                  <th class="px-6 py-3 bg-slate-50">Producto</th>
+                  <th class="px-6 py-3 bg-slate-50">Categoría</th>
+                  <th class="px-6 py-3 bg-slate-50">Stock Actual</th>
+                  <th class="px-6 py-3 bg-slate-50 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="tabla-productos" class="divide-y text-sm text-slate-600">
+                <tr><td colspan="5" class="px-6 py-6 text-center text-slate-400">Cargando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <script>
+    if (currentUser && currentUser.rol !== 'Administrador') {
+      document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+    }
+
+    let editandoProductoId = null;
+
+    async function cargarCategorias() {
+        const res = await fetch('/api/categorias', { headers: { 'Authorization': `Bearer ${token}` } });
+        const categorias = await res.json();
+        document.getElementById('categoria_id').innerHTML = categorias.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
+    }
+
+    async function cargarProductos() {
+        try {
+            const res = await fetch('/api/productos', { headers: { 'Authorization': `Bearer ${token}` } });
+            const productos = await res.json();
+            const tbody = document.getElementById('tabla-productos');
+            
+            if (!productos.length) {
+                tbody.innerHTML = `<tr><td colspan="5" class="px-6 py-6 text-center text-slate-400">No hay productos registrados.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = productos.map(p => `
+                <tr class="hover:bg-slate-50 transition">
+                    <td class="px-6 py-4 font-mono font-bold text-slate-700">${p.sku}</td>
+                    <td class="px-6 py-4 font-medium text-slate-800">${p.nombre}</td>
+                    <td class="px-6 py-4">${p.categoria_nombre || 'Sin Categoría'}</td>
+                    <td class="px-6 py-4 font-semibold ${p.stock_actual > 0 ? 'text-emerald-600' : 'text-red-500'}">${Number(p.stock_actual).toFixed(2)} ${p.unidad_medida}</td>
+                    <td class="px-6 py-4 text-right">
+                        <button onclick="prepararEdicion(${p.id}, '${p.sku}', '${p.nombre.replace(/'/g, "\\'")}', '${p.unidad_medida}', ${p.categoria_id})" class="text-amber-600 hover:text-amber-800 font-medium text-sm bg-amber-50 px-3 py-1 rounded-md">✏️ Editar</button>
+                    </td>
+                </tr>
+            `).join('');
+        } catch (e) { console.error("Error", e); }
+    }
+
+    window.prepararEdicion = function(id, sku, nombre, unidad, categoria_id) {
+        editandoProductoId = id;
+        document.getElementById('sku').value = sku;
+        document.getElementById('nombre-prod').value = nombre;
+        document.getElementById('unidad_medida').value = unidad;
+        document.getElementById('categoria_id').value = categoria_id;
+        
+        document.getElementById('form-titulo').textContent = 'Editar Producto';
+        const btnSubmit = document.getElementById('btn-submit');
+        btnSubmit.textContent = 'Actualizar Producto';
+        btnSubmit.className = "w-full bg-amber-500 text-white py-2.5 rounded-lg font-medium hover:bg-amber-600 transition shadow-xs";
+        document.getElementById('btn-cancelar').classList.remove('hidden');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    window.cancelarEdicion = function() {
+        editandoProductoId = null;
+        document.getElementById('form-producto').reset();
+        document.getElementById('form-titulo').textContent = 'Crear Nuevo Producto';
+        const btnSubmit = document.getElementById('btn-submit');
+        btnSubmit.textContent = 'Guardar Producto';
+        btnSubmit.className = "w-full bg-corporate-primary text-white py-2.5 rounded-lg font-medium transition shadow-xs";
+        document.getElementById('btn-cancelar').classList.add('hidden');
+    };
+
+    document.getElementById('form-producto').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const msg = document.getElementById('msg-producto');
+        const url = editandoProductoId ? `/api/productos/${editandoProductoId}` : '/api/productos';
+        const method = editandoProductoId ? 'PUT' : 'POST';
+
+        try {
+            const res = await fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({
+                    sku: document.getElementById('sku').value,
+                    nombre: document.getElementById('nombre-prod').value,
+                    unidad_medida: document.getElementById('unidad_medida').value,
+                    categoria_id: document.getElementById('categoria_id').value
+                })
+            });
+            const data = await res.json();
+            msg.className = `px-4 py-3 rounded-lg text-sm font-medium block mt-4 ${res.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`;
+            msg.textContent = res.ok ? `✅ ${data.mensaje || 'Operación exitosa'}` : `❌ ${data.error}`;
+            
+            if(res.ok) { 
+                cancelarEdicion();
+                cargarProductos(); 
+            }
+        } catch (error) { console.error(error); }
+    });
+
+    cargarCategorias();
+    cargarProductos();
+  </script>
+</body>
+</html>

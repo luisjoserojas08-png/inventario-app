@@ -152,15 +152,22 @@
       } catch (err) { alert('Error de conexión con el servidor.'); }
     }
 
-    async function cargarGestion() {
+async function cargarGestion() {
+      const tbody = document.getElementById('tabla-gestion');
       try {
         const [resEntradas, resSalidas] = await Promise.all([
           fetch('/api/reporte/entradas', { headers: { 'Authorization': `Bearer ${token}` } }),
           fetch('/api/reporte/salidas', { headers: { 'Authorization': `Bearer ${token}` } })
         ]);
+        
         const entradas = await resEntradas.json();
         const salidas = await resSalidas.json();
-        const tbody = document.getElementById('tabla-gestion');
+
+        // VALIDACIÓN: Si el backend devuelve un error, lo mostramos en la tabla
+        if (entradas.error || salidas.error) {
+           tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-6 text-center font-bold text-red-500">Error del servidor: ${entradas.error || salidas.error}. <br> <span class="text-slate-500 font-normal">¿Ejecutaste el código SQL en Neon DB?</span></td></tr>`;
+           return;
+        }
 
         const filasEntradas = entradas.map(e => `
           <tr class="hover:bg-slate-50 transition">
@@ -190,7 +197,9 @@
 
         const combinadas = [...filasEntradas, ...filasSalidas];
         tbody.innerHTML = combinadas.length ? combinadas.join('') : `<tr><td colspan="6" class="px-6 py-6 text-center text-slate-400">No hay movimientos registrados.</td></tr>`;
-      } catch (err) { console.error("Error al cargar gestión", err); }
+      } catch (err) { 
+        tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-6 text-center font-bold text-red-500">Error de conexión con el servidor. Revisar logs.</td></tr>`;
+      }
     }
 
     async function cargarLogs() {

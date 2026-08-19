@@ -1,0 +1,16 @@
+<!-- Vista simplificada para Admin: Tabla con botón de Borrar -->
+<tbody id="tabla-admin">
+  <!-- Carga mediante fetch a /api/reporte/entradas o salidas -->
+  <!-- Cada fila incluye: <button onclick="borrarMovimiento('${tipo}', ${item.id})" class="text-red-600">Borrar</button> -->
+</tbody>
+
+<script>
+async function borrarMovimiento(tipo, id) {
+    if(!confirm("¿Seguro que deseas eliminar este registro?")) return;
+    const res = await fetch(`/api/admin/movimientos/${tipo}/${id}`, { 
+        method: 'DELETE', 
+        headers: { 'Authorization': `Bearer ${token}` } 
+    });
+    if(res.ok) { alert("Eliminado"); location.reload(); }
+}
+</script>

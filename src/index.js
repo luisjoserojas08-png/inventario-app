@@ -186,10 +186,14 @@ app.post('/api/productos', verificarToken, verificarRol(['Administrador', 'Super
 
 app.get('/api/productos', verificarToken, async (req, res) => {
     try { 
-        const query = `SELECT p.id, p.sku, p.nombre, p.unidad_medida, p.stock_actual, p.categoria_id, c.nombre AS categoria_nombre 
-                       FROM productos p 
-                       LEFT JOIN categorias c ON p.categoria_id = c.id 
-                       ORDER BY p.nombre ASC`;
+        // BLINDAJE: Ahora el stock_actual se calcula en tiempo real sumando los lotes reales (entradas)
+        const query = `
+            SELECT p.id, p.sku, p.nombre, p.unidad_medida, p.categoria_id, c.nombre AS categoria_nombre, 
+                   COALESCE((SELECT SUM(stock_restante) FROM entradas WHERE producto_id = p.id), 0) AS stock_actual
+            FROM productos p 
+            LEFT JOIN categorias c ON p.categoria_id = c.id 
+            ORDER BY p.nombre ASC
+        `;
         res.json((await pool.query(query)).rows); 
     } catch (e) { 
         res.status(500).json({ error: 'Error' }); 

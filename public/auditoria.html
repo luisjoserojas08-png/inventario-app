@@ -5,27 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ERP - Auditoría y Gestión</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = { theme: { extend: { colors: { corporate: { dark: '#0f172a', primary: '#1e40af', light: '#f8fafc', border: '#e2e8f0' } } } } }
-    </script>
+    <script>tailwind.config={theme:{extend:{colors:{corporate:{dark:'#0f172a',primary:'#1e40af',light:'#f8fafc',border:'#e2e8f0'}}}}}</script>
 </head>
 <body class="bg-corporate-light font-sans text-slate-800 subpixel-antialiased">
 
   <script>
     const token = localStorage.getItem('erp_token') || localStorage.getItem('token');
     if (!token) window.location.href = 'login.html';
-    
-    function parseJwt(t) { 
-      try { return JSON.parse(atob(t.split('.')[1])); } catch (e) { return null; } 
-    }
+    function parseJwt(t) { try { return JSON.parse(atob(t.split('.')[1])); } catch (e) { return null; } }
     const currentUser = parseJwt(token);
-    if (!currentUser || currentUser.rol !== 'Administrador') {
-      alert('Acceso denegado: Vista exclusiva para Administradores.');
-      window.location.href = 'index.html';
-    }
+    if (!currentUser || currentUser.rol !== 'Administrador') window.location.href = 'index.html';
   </script>
 
-  <div class="flex h-screen overflow-hidden">
+  <div class="flex h-screen overflow-hidden relative">
+    
     <!-- Sidebar -->
     <aside class="w-64 bg-corporate-dark text-slate-300 flex flex-col hidden md:flex">
       <div class="p-6 text-xl font-bold text-white tracking-wider border-b border-slate-800">ERP Genética</div>
@@ -37,201 +30,162 @@
         <a href="categorias.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🏷️ Categorías y Almacén</a>
         <a href="usuarios.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">👥 Gestión de Usuarios</a>
         <a href="auditoria.html" class="admin-only block px-4 py-2.5 rounded-lg bg-corporate-primary text-white font-medium shadow-xs">🛡️ Auditoría del Sistema</a>
-        <button onclick="descargarReporte()" class="w-full text-left block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition mt-4 border-t border-slate-700 pt-4">📑 Descargar Reporte Excel</button>
       </nav>
-      <div class="p-4 border-t border-slate-800 text-xs text-slate-500">Sesión Activa • Neon DB</div>
     </aside>
 
-    <!-- Main Content -->
     <div class="flex-1 flex flex-col overflow-y-auto">
       <header class="bg-white border-b h-16 flex items-center justify-between px-8 shadow-xs">
-        <h1 class="text-lg font-semibold text-slate-700">Módulo de Auditoría y Gestión de Registros</h1>
-        <button onclick="localStorage.clear(); window.location.href='login.html'" class="text-sm text-red-600 font-medium bg-red-50 px-3 py-1.5 rounded-lg hover:bg-red-100 transition">Cerrar Sesión</button>
+        <h1 class="text-lg font-semibold text-slate-700">Auditoría y Edición Sensible</h1>
+        <button onclick="localStorage.clear(); window.location.href='login.html'" class="text-sm text-red-600 font-medium bg-red-50 px-3 py-1.5 rounded-lg">Cerrar Sesión</button>
       </header>
 
       <main class="p-8">
-        <!-- Pestañas -->
         <div class="flex space-x-3 mb-6">
-          <button id="btn-tab-gestion" onclick="mostrarTab('gestion')" class="px-5 py-2.5 rounded-lg font-medium text-sm bg-corporate-primary text-white shadow-xs transition">Gestión y Borrado de Movimientos</button>
-          <button id="btn-tab-logs" onclick="mostrarTab('logs')" class="px-5 py-2.5 rounded-lg font-medium text-sm bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 transition">Historial de Logs (Auditoría)</button>
+          <button id="btn-tab-gestion" onclick="mostrarTab('gestion')" class="px-5 py-2.5 rounded-lg font-medium text-sm bg-corporate-primary text-white shadow-xs">Gestión y Edición</button>
+          <button id="btn-tab-logs" onclick="mostrarTab('logs')" class="px-5 py-2.5 rounded-lg font-medium text-sm bg-white border text-slate-700">Logs de Auditoría</button>
         </div>
 
-        <!-- Vista 1: Gestión de Movimientos -->
-        <div id="contenedor-gestion" class="bg-white rounded-xl border border-corporate-border shadow-xs overflow-hidden">
+        <!-- Vista Gestión -->
+        <div id="contenedor-gestion" class="bg-white rounded-xl border shadow-xs overflow-hidden">
           <div class="px-6 py-4 border-b bg-slate-50 flex justify-between items-center">
-            <h3 class="font-bold text-slate-700">Movimientos Registrados (Control de Borrado)</h3>
+            <h3 class="font-bold text-slate-700">Edición de Inventario</h3>
             <button onclick="cargarGestion()" class="text-sm text-corporate-primary font-medium hover:underline">Actualizar</button>
           </div>
-          <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse">
-              <thead>
-                <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b">
-                  <th class="px-6 py-3">Tipo</th>
-                  <th class="px-6 py-3">Producto (SKU)</th>
-                  <th class="px-6 py-3">Almacén</th>
-                  <th class="px-6 py-3">Cantidad</th>
-                  <th class="px-6 py-3">Detalle / Concepto</th>
-                  <th class="px-6 py-3 text-center">Acción</th>
-                </tr>
-              </thead>
-              <tbody id="tabla-gestion" class="divide-y text-sm text-slate-600">
-                <tr><td colspan="6" class="px-6 py-6 text-center text-slate-400">Cargando movimientos...</td></tr>
-              </tbody>
-            </table>
-          </div>
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-50 text-slate-500 text-xs uppercase border-b">
+                <th class="px-6 py-3">Tipo</th><th class="px-6 py-3">Producto</th><th class="px-6 py-3">Cantidad</th><th class="px-6 py-3 text-right">Acciones (Admin)</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-gestion" class="divide-y text-sm text-slate-600"></tbody>
+          </table>
         </div>
 
-        <!-- Vista 2: Logs de Auditoría -->
-        <div id="contenedor-logs" class="hidden bg-white rounded-xl border border-corporate-border shadow-xs overflow-hidden">
-          <div class="px-6 py-4 border-b bg-slate-50 flex justify-between items-center">
-            <h3 class="font-bold text-slate-700">Registro de Cambios y Eliminaciones Sensibles</h3>
-            <button onclick="cargarLogs()" class="text-sm text-corporate-primary font-medium hover:underline">Actualizar Logs</button>
+        <!-- Vista Logs -->
+        <div id="contenedor-logs" class="hidden bg-white rounded-xl border shadow-xs overflow-hidden">
+          <div class="px-6 py-4 border-b bg-slate-50">
+            <h3 class="font-bold text-slate-700">Registro de Cambios</h3>
           </div>
-          <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse">
-              <thead>
-                <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b">
-                  <th class="px-6 py-3">Fecha y Hora</th>
-                  <th class="px-6 py-3">Admin Responsable</th>
-                  <th class="px-6 py-3">Acción</th>
-                  <th class="px-6 py-3">Tabla Afectada</th>
-                  <th class="px-6 py-3">Datos del Registro Eliminado</th>
-                </tr>
-              </thead>
-              <tbody id="tabla-logs" class="divide-y text-sm text-slate-600">
-                <tr><td colspan="5" class="px-6 py-6 text-center text-slate-400">Cargando logs...</td></tr>
-              </tbody>
-            </table>
-          </div>
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-50 text-slate-500 text-xs uppercase border-b">
+                <th class="px-6 py-3">Fecha</th><th class="px-6 py-3">Admin</th><th class="px-6 py-3">Acción</th><th class="px-6 py-3">Tabla</th><th class="px-6 py-3">Detalle & Motivo</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-logs" class="divide-y text-sm text-slate-600"></tbody>
+          </table>
         </div>
       </main>
+    </div>
+
+    <!-- MODAL EDICIÓN -->
+    <div id="modal-editar" class="hidden absolute inset-0 bg-black bg-opacity-50 flex justify-center items-center">
+      <div class="bg-white rounded-xl p-6 w-96 shadow-lg">
+        <h3 class="font-bold text-lg mb-4">Editar Cantidad</h3>
+        <input type="hidden" id="edit-id"><input type="hidden" id="edit-tipo">
+        <label class="block text-sm font-medium mb-1">Nueva Cantidad</label>
+        <input type="number" id="edit-cant" step="0.01" class="w-full border rounded-lg px-3 py-2 mb-4">
+        <label class="block text-sm font-medium mb-1">Motivo de Edición (Requerido)</label>
+        <input type="text" id="edit-motivo" placeholder="Ej: Error de digitación" class="w-full border rounded-lg px-3 py-2 mb-4">
+        <div class="flex justify-end gap-2">
+          <button onclick="cerrarModales()" class="px-4 py-2 bg-slate-200 rounded-lg">Cancelar</button>
+          <button onclick="procesarEdicion()" class="px-4 py-2 bg-corporate-primary text-white rounded-lg">Guardar y Ajustar Stock</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL BORRAR -->
+    <div id="modal-borrar" class="hidden absolute inset-0 bg-black bg-opacity-50 flex justify-center items-center">
+      <div class="bg-white rounded-xl p-6 w-96 shadow-lg">
+        <h3 class="font-bold text-lg mb-2 text-red-600">Eliminar Registro</h3>
+        <p class="text-sm text-slate-500 mb-4">El stock se ajustará automáticamente.</p>
+        <input type="hidden" id="del-id"><input type="hidden" id="del-tipo">
+        <label class="block text-sm font-medium mb-1">Motivo de Eliminación (Requerido)</label>
+        <input type="text" id="del-motivo" placeholder="Ej: Registro duplicado" class="w-full border rounded-lg px-3 py-2 mb-4">
+        <div class="flex justify-end gap-2">
+          <button onclick="cerrarModales()" class="px-4 py-2 bg-slate-200 rounded-lg">Cancelar</button>
+          <button onclick="procesarBorrado()" class="px-4 py-2 bg-red-600 text-white rounded-lg">Confirmar Borrado</button>
+        </div>
+      </div>
     </div>
   </div>
 
   <script>
-    async function descargarReporte() {
-      try {
-        const res = await fetch('/api/reporte-salidas', { headers: { 'Authorization': `Bearer ${token}` } });
-        if (!res.ok) return alert("Error al descargar excel.");
-        const blob = await res.blob();
-        const a = document.createElement('a');
-        a.href = window.URL.createObjectURL(blob);
-        a.download = 'reporte_inventario_general.xlsx';
-        a.click();
-      } catch (e) {
-        alert("Error de conexión al descargar.");
-      }
-    }
-
     function mostrarTab(tab) {
-      const esGestion = tab === 'gestion';
-      document.getElementById('contenedor-gestion').classList.toggle('hidden', !esGestion);
-      document.getElementById('contenedor-logs').classList.toggle('hidden', esGestion);
-      
-      document.getElementById('btn-tab-gestion').className = esGestion 
-        ? 'px-5 py-2.5 rounded-lg font-medium text-sm bg-corporate-primary text-white shadow-xs transition' 
-        : 'px-5 py-2.5 rounded-lg font-medium text-sm bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 transition';
-        
-      document.getElementById('btn-tab-logs').className = !esGestion 
-        ? 'px-5 py-2.5 rounded-lg font-medium text-sm bg-corporate-primary text-white shadow-xs transition' 
-        : 'px-5 py-2.5 rounded-lg font-medium text-sm bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 transition';
-
-      if (esGestion) cargarGestion();
-      else cargarLogs();
+      document.getElementById('contenedor-gestion').classList.toggle('hidden', tab !== 'gestion');
+      document.getElementById('contenedor-logs').classList.toggle('hidden', tab !== 'logs');
+      if (tab === 'gestion') cargarGestion(); else cargarLogs();
     }
 
-    async function eliminarMovimiento(tipo, id) {
-      if (!confirm(`⚠️ ¿Estás seguro de eliminar este registro de ${tipo}? Si es una salida, el stock volverá al inventario y el movimiento quedará registrado en auditoría.`)) return;
-      
+    function abrirModalEditar(tipo, id, cantidad) {
+      document.getElementById('edit-id').value = id;
+      document.getElementById('edit-tipo').value = tipo;
+      document.getElementById('edit-cant').value = cantidad;
+      document.getElementById('edit-motivo').value = '';
+      document.getElementById('modal-editar').classList.remove('hidden');
+    }
+
+    function abrirModalBorrar(tipo, id) {
+      document.getElementById('del-id').value = id;
+      document.getElementById('del-tipo').value = tipo;
+      document.getElementById('del-motivo').value = '';
+      document.getElementById('modal-borrar').classList.remove('hidden');
+    }
+
+    function cerrarModales() {
+      document.getElementById('modal-editar').classList.add('hidden');
+      document.getElementById('modal-borrar').classList.add('hidden');
+    }
+
+    async function procesarEdicion() {
+      const id = document.getElementById('edit-id').value;
+      const tipo = document.getElementById('edit-tipo').value;
+      const nueva_cantidad = document.getElementById('edit-cant').value;
+      const motivo = document.getElementById('edit-motivo').value;
+
+      if(!motivo || !nueva_cantidad) return alert("Cantidad y Motivo son obligatorios.");
+
       try {
         const res = await fetch(`/api/admin/movimientos/${tipo}/${id}`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` }
+          method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ nueva_cantidad, motivo })
         });
-        const data = await res.json();
-        if (res.ok) {
-          alert('✅ Registro eliminado correctamente.');
-          cargarGestion();
-        } else {
-          alert(`❌ Error: ${data.error}`);
-        }
-      } catch (err) {
-        alert('Error de conexión con el servidor.');
-      }
+        if(res.ok) { alert('Stock ajustado.'); cerrarModales(); cargarGestion(); }
+        else alert((await res.json()).error);
+      } catch (e) { alert('Error.'); }
+    }
+
+    async function procesarBorrado() {
+      const id = document.getElementById('del-id').value;
+      const tipo = document.getElementById('del-tipo').value;
+      const motivo = document.getElementById('del-motivo').value;
+
+      if(!motivo) return alert("Debes especificar un motivo.");
+
+      try {
+        const res = await fetch(`/api/admin/movimientos/${tipo}/${id}`, {
+          method: 'DELETE', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ motivo })
+        });
+        if(res.ok) { alert('Registro eliminado.'); cerrarModales(); cargarGestion(); }
+        else alert((await res.json()).error);
+      } catch (e) { alert('Error.'); }
     }
 
     async function cargarGestion() {
+      const [r1, r2] = await Promise.all([ fetch('/api/reporte/entradas',{headers:{'Authorization':`Bearer ${token}`}}), fetch('/api/reporte/salidas',{headers:{'Authorization':`Bearer ${token}`}}) ]);
+      const e = await r1.json(); const s = await r2.json();
       const tbody = document.getElementById('tabla-gestion');
-      try {
-        const [resEntradas, resSalidas] = await Promise.all([
-          fetch('/api/reporte/entradas', { headers: { 'Authorization': `Bearer ${token}` } }),
-          fetch('/api/reporte/salidas', { headers: { 'Authorization': `Bearer ${token}` } })
-        ]);
-        
-        const entradas = await resEntradas.json();
-        const salidas = await resSalidas.json();
-
-        if (entradas.error || salidas.error) {
-          tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-6 text-center font-semibold text-red-500">Error del servidor: ${entradas.error || salidas.error}</td></tr>`;
-          return;
-        }
-
-        const filasEntradas = (Array.isArray(entradas) ? entradas : []).map(e => `
-          <tr class="hover:bg-slate-50 transition">
-            <td class="px-6 py-4 font-semibold text-emerald-600">ENTRADA</td>
-            <td class="px-6 py-4">${e.producto_nombre} <br><span class="text-xs text-slate-400">SKU: ${e.sku}</span></td>
-            <td class="px-6 py-4">${e.almacen || 'Principal'}</td>
-            <td class="px-6 py-4 font-bold text-emerald-700">+${e.cantidad} ${e.unidad_medida || 'uds'}</td>
-            <td class="px-6 py-4 text-xs text-slate-500">Costo U: $${Number(e.costo_unitario).toFixed(2)} <br>Fecha: ${new Date(e.fecha).toLocaleString()}</td>
-            <td class="px-6 py-4 text-center">
-              <button onclick="eliminarMovimiento('entrada', ${e.id})" class="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-lg text-xs font-medium transition">Borrar</button>
-            </td>
-          </tr>
-        `);
-
-        const filasSalidas = (Array.isArray(salidas) ? salidas : []).map(s => `
-          <tr class="hover:bg-slate-50 transition">
-            <td class="px-6 py-4 font-semibold text-red-600">SALIDA</td>
-            <td class="px-6 py-4">${s.producto_nombre} <br><span class="text-xs text-slate-400">SKU: ${s.sku}</span></td>
-            <td class="px-6 py-4">${s.almacen || 'Principal'}</td>
-            <td class="px-6 py-4 font-bold text-red-700">-${s.cantidad} ${s.unidad_medida || 'uds'}</td>
-            <td class="px-6 py-4 text-xs text-slate-500">Concepto: ${s.concepto} <br>Fecha: ${new Date(s.fecha).toLocaleString()}</td>
-            <td class="px-6 py-4 text-center">
-              <button onclick="eliminarMovimiento('salida', ${s.id})" class="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-lg text-xs font-medium transition">Borrar</button>
-            </td>
-          </tr>
-        `);
-
-        const combinadas = [...filasEntradas, ...filasSalidas];
-        tbody.innerHTML = combinadas.length ? combinadas.join('') : `<tr><td colspan="6" class="px-6 py-6 text-center text-slate-400">No hay movimientos registrados.</td></tr>`;
-      } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-6 text-center text-red-500 font-semibold">Error al cargar movimientos.</td></tr>`;
-      }
+      tbody.innerHTML = [
+        ...(Array.isArray(e)?e:[]).map(x => `<tr><td class="px-6 py-4 font-bold text-emerald-600">ENTRADA</td><td class="px-6 py-4">${x.producto_nombre} <br><span class="text-xs text-slate-400">${x.sku}</span></td><td class="px-6 py-4">+${x.cantidad} ${x.unidad_medida||''}</td><td class="px-6 py-4 text-right"><button onclick="abrirModalEditar('entrada',${x.id},${x.cantidad})" class="text-blue-600 mx-2 text-sm hover:underline">Editar</button><button onclick="abrirModalBorrar('entrada',${x.id})" class="text-red-600 text-sm hover:underline">Borrar</button></td></tr>`),
+        ...(Array.isArray(s)?s:[]).map(x => `<tr><td class="px-6 py-4 font-bold text-red-600">SALIDA</td><td class="px-6 py-4">${x.producto_nombre} <br><span class="text-xs text-slate-400">${x.sku}</span></td><td class="px-6 py-4">-${x.cantidad} ${x.unidad_medida||''}</td><td class="px-6 py-4 text-right"><button onclick="abrirModalEditar('salida',${x.id},${x.cantidad})" class="text-blue-600 mx-2 text-sm hover:underline">Editar</button><button onclick="abrirModalBorrar('salida',${x.id})" class="text-red-600 text-sm hover:underline">Borrar</button></td></tr>`)
+      ].join('');
     }
 
     async function cargarLogs() {
-      const tbody = document.getElementById('tabla-logs');
-      try {
-        const res = await fetch('/api/reporte/logs', { headers: { 'Authorization': `Bearer ${token}` } });
-        const logs = await res.json();
-
-        if (!Array.isArray(logs) || !logs.length) {
-          tbody.innerHTML = `<tr><td colspan="5" class="px-6 py-6 text-center text-slate-400">No hay registros de auditoría.</td></tr>`;
-          return;
-        }
-
-        tbody.innerHTML = logs.map(l => `
-          <tr class="hover:bg-slate-50 transition">
-            <td class="px-6 py-4 text-xs text-slate-500 whitespace-nowrap">${new Date(l.fecha).toLocaleString()}</td>
-            <td class="px-6 py-4 font-bold text-slate-800">${l.usuario_nombre}</td>
-            <td class="px-6 py-4 text-red-600 font-semibold">${l.accion}</td>
-            <td class="px-6 py-4"><span class="bg-slate-100 px-2 py-1 rounded text-xs font-mono">${l.tabla_afectada}</span></td>
-            <td class="px-6 py-4 font-mono text-xs text-slate-500 truncate max-w-xs" title='${l.detalles}'>${l.detalles}</td>
-          </tr>
-        `).join('');
-      } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="5" class="px-6 py-6 text-center text-red-500 font-semibold">Error al cargar logs.</td></tr>`;
-      }
+      const res = await fetch('/api/reporte/logs', {headers:{'Authorization':`Bearer ${token}`}});
+      const l = await res.json();
+      document.getElementById('tabla-logs').innerHTML = (Array.isArray(l)?l:[]).map(x => `<tr><td class="px-6 py-4 text-xs">${new Date(x.fecha).toLocaleString()}</td><td class="px-6 py-4 font-bold">${x.usuario_nombre}</td><td class="px-6 py-4 font-bold text-corporate-primary">${x.accion}</td><td class="px-6 py-4 uppercase text-xs">${x.tabla_afectada}</td><td class="px-6 py-4 text-xs max-w-sm truncate" title='${x.detalles}'>${x.detalles}</td></tr>`).join('');
     }
 
     cargarGestion();

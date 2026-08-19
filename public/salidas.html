@@ -25,14 +25,14 @@
         <span>ERP Genética</span>
       </div>
       <nav class="flex-1 p-4 space-y-2">
-        <a href="index.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition">📊 Dashboard Inventario</a>
-        <a href="entradas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition">📥 Registro de Compras</a>
+        <a href="index.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📊 Dashboard Inventario</a>
+        <a href="entradas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📥 Registro de Compras</a>
         <a href="salidas.html" class="block px-4 py-2.5 rounded-lg bg-corporate-primary text-white font-medium shadow-xs">📤 Registro de Salidas</a>
-        <a href="reportes.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition">📑 Historial y Reportes</a>
-        <a href="categorias.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition">🏷️ Categorías y Almacén</a>
-        <a href="usuarios.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition">👥 Gestión de Usuarios</a>
-        <a href="auditoria.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition">🛡️ Auditoría del Sistema</a>
-        <button onclick="descargarReporte()" class="w-full text-left block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition mt-4 border-t border-slate-700 pt-4">📑 Descargar Reporte Excel</button>
+        <a href="reportes.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📑 Historial y Reportes</a>
+        <a href="categorias.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🏷️ Categorías y Almacén</a>
+        <a href="usuarios.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">👥 Gestión de Usuarios</a>
+        <a href="auditoria.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🛡️ Auditoría del Sistema</a>
+        <button onclick="descargarReporteGlobal()" class="w-full text-left block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition mt-4 border-t border-slate-700 pt-4">📑 Bajar Stock Actual</button>
       </nav>
       <div class="p-4 border-t border-slate-800 text-xs text-slate-500">Sesión Activa • Neon DB</div>
     </aside>
@@ -52,14 +52,23 @@
               <label class="block text-sm font-medium mb-1">Seleccionar Producto</label>
               <select id="producto_id" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary"></select>
             </div>
+            
             <div>
               <label class="block text-sm font-medium mb-1">Cantidad a Salir <span class="text-slate-400 text-xs">(Ingresar en la unidad de medida del producto)</span></label>
               <input type="number" id="cantidad" min="0.01" step="0.01" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary" placeholder="Ej: 5.5">
             </div>
+
             <div>
               <label class="block text-sm font-medium mb-1">Concepto / Destino</label>
               <input type="text" id="concepto" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary" placeholder="Ej: Consumo Larvas, Venta interna...">
             </div>
+
+            <!-- Campo Fecha Real -->
+            <div>
+              <label class="block text-sm font-medium mb-1">Fecha de Salida Real</label>
+              <input type="date" id="fecha_real" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary text-slate-600">
+            </div>
+
             <div id="mensaje-estado" class="hidden px-4 py-3 rounded-lg text-sm font-medium"></div>
             <button type="submit" id="btn-submit" class="w-full bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-lg font-medium transition shadow-xs mt-2">
               Procesar Salida
@@ -75,15 +84,15 @@
       document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
     }
 
-    async function descargarReporte() {
-        try {
-            const res = await fetch('/api/reporte-salidas', { headers: { 'Authorization': `Bearer ${token}` } });
-            if (!res.ok) return alert("Error al descargar excel.");
-            const blob = await res.blob();
-            const a = document.createElement('a');
-            a.href = window.URL.createObjectURL(blob); a.download = 'reporte_inventario.xlsx';
-            document.body.appendChild(a); a.click(); a.remove();
-        } catch (e) { alert("Error al descargar."); }
+    // Poner fecha actual por defecto en el campo de fecha real
+    document.getElementById('fecha_real').valueAsDate = new Date();
+
+    async function descargarReporteGlobal() {
+        const res = await fetch('/api/reporte-salidas', { headers: { 'Authorization': `Bearer ${token}` } });
+        const blob = await res.blob();
+        const a = document.createElement('a');
+        a.href = window.URL.createObjectURL(blob); a.download = 'inventario_actual.xlsx';
+        a.click();
     }
 
     async function cargarProductos() {
@@ -109,7 +118,8 @@
           body: JSON.stringify({
             producto_id: document.getElementById('producto_id').value,
             cantidad: parseFloat(document.getElementById('cantidad').value),
-            concepto: document.getElementById('concepto').value
+            concepto: document.getElementById('concepto').value,
+            fecha: document.getElementById('fecha_real').value // Enviamos la fecha real elegida
           })
         });
 
@@ -117,7 +127,10 @@
         mensajeDiv.className = `px-4 py-3 rounded-lg text-sm font-medium block mt-4 ${respuesta.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`;
         mensajeDiv.textContent = respuesta.ok ? '✅ Salida registrada con éxito. Inventario descontado.' : `❌ ${data.error}`;
         
-        if (respuesta.ok) document.getElementById('form-salida').reset();
+        if (respuesta.ok) {
+            document.getElementById('form-salida').reset();
+            document.getElementById('fecha_real').valueAsDate = new Date(); // Resetear a hoy
+        }
       } catch (err) { alert("Error de red"); }
       finally { btn.disabled = false; btn.innerHTML = 'Procesar Salida'; }
     });

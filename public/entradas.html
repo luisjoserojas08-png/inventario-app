@@ -25,14 +25,14 @@
         <span>ERP Genética</span>
       </div>
       <nav class="flex-1 p-4 space-y-2">
-        <a href="index.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition">📊 Dashboard Inventario</a>
+        <a href="index.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📊 Dashboard Inventario</a>
         <a href="entradas.html" class="block px-4 py-2.5 rounded-lg bg-corporate-primary text-white font-medium shadow-xs">📥 Registro de Compras</a>
-        <a href="salidas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition">📤 Registro de Salidas</a>
-        <a href="reportes.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition">📑 Historial y Reportes</a>
-        <a href="categorias.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition">🏷️ Categorías y Almacén</a>
-        <a href="usuarios.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition">👥 Gestión de Usuarios</a>
-        <a href="auditoria.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition">🛡️ Auditoría del Sistema</a>
-        <button onclick="descargarReporte()" class="w-full text-left block px-4 py-2.5 rounded-lg hover:bg-slate-800 hover:text-white transition mt-4 border-t border-slate-700 pt-4">📑 Descargar Reporte Excel</button>
+        <a href="salidas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📤 Registro de Salidas</a>
+        <a href="reportes.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📑 Historial y Reportes</a>
+        <a href="categorias.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🏷️ Categorías y Almacén</a>
+        <a href="usuarios.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">👥 Gestión de Usuarios</a>
+        <a href="auditoria.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🛡️ Auditoría del Sistema</a>
+        <button onclick="descargarReporteGlobal()" class="w-full text-left block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition mt-4 border-t border-slate-700 pt-4">📑 Bajar Stock Actual</button>
       </nav>
       <div class="p-4 border-t border-slate-800 text-xs text-slate-500">Sesión Activa • Neon DB</div>
     </aside>
@@ -46,7 +46,7 @@
 
       <main class="p-8 flex flex-col lg:flex-row gap-8">
         
-        <!-- Formulario: Registrar Lote de Compra (Izquierda) -->
+        <!-- Formulario: Registrar Lote de Compra -->
         <div class="bg-white rounded-xl border border-corporate-border p-6 shadow-xs flex-1">
           <h3 class="font-bold text-slate-700 border-b pb-3 mb-5">Ingresar Existencias al Almacén</h3>
           <form id="form-entrada" class="space-y-4">
@@ -54,6 +54,7 @@
               <label class="block text-sm font-medium mb-1">Seleccionar Producto Existente</label>
               <select id="producto_id" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary"></select>
             </div>
+            
             <div class="grid grid-cols-2 gap-4">
               <div>
                 <label class="block text-sm font-medium mb-1">Cantidad Comprada</label>
@@ -64,12 +65,19 @@
                 <input type="number" id="costo_unitario" min="0.01" step="0.01" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary">
               </div>
             </div>
+
+            <!-- Campo Fecha Real -->
+            <div>
+              <label class="block text-sm font-medium mb-1">Fecha de Ingreso Real</label>
+              <input type="date" id="fecha_real" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary text-slate-600">
+            </div>
+
             <div id="msg-entrada" class="hidden px-4 py-3 rounded-lg text-sm font-medium mt-4"></div>
             <button type="submit" id="btn-entrada" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-lg font-medium transition">Registrar Lote de Compra</button>
           </form>
         </div>
 
-        <!-- Formulario: Crear Nuevo Producto (Derecha) -->
+        <!-- Formulario: Crear Nuevo Producto -->
         <div class="bg-slate-50 rounded-xl border border-corporate-border p-6 shadow-xs w-full lg:w-1/3 h-fit">
           <h3 class="font-bold text-slate-700 border-b pb-3 mb-5">Crear Nuevo Producto (Catálogo)</h3>
           <form id="form-producto" class="space-y-4">
@@ -110,15 +118,15 @@
       document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
     }
 
-    async function descargarReporte() {
-        try {
-            const res = await fetch('/api/reporte-salidas', { headers: { 'Authorization': `Bearer ${token}` } });
-            if (!res.ok) return alert("Error al descargar excel.");
-            const blob = await res.blob();
-            const a = document.createElement('a');
-            a.href = window.URL.createObjectURL(blob); a.download = 'reporte_inventario.xlsx';
-            document.body.appendChild(a); a.click(); a.remove();
-        } catch (e) { alert("Error al descargar."); }
+    // Poner fecha actual por defecto en el campo de fecha real
+    document.getElementById('fecha_real').valueAsDate = new Date();
+
+    async function descargarReporteGlobal() {
+        const res = await fetch('/api/reporte-salidas', { headers: { 'Authorization': `Bearer ${token}` } });
+        const blob = await res.blob();
+        const a = document.createElement('a');
+        a.href = window.URL.createObjectURL(blob); a.download = 'inventario_actual.xlsx';
+        a.click();
     }
 
     async function cargarCategorias() {
@@ -137,7 +145,6 @@
         ).join('');
     }
 
-    // Submit: Nuevo Producto
     document.getElementById('form-producto').addEventListener('submit', async (e) => {
         e.preventDefault();
         const msg = document.getElementById('msg-producto');
@@ -159,7 +166,6 @@
         } catch (error) { console.error(error); }
     });
 
-    // Submit: Ingreso de Lote (Compra)
     document.getElementById('form-entrada').addEventListener('submit', async (e) => {
         e.preventDefault();
         const msg = document.getElementById('msg-entrada');
@@ -170,13 +176,17 @@
                 body: JSON.stringify({
                     producto_id: document.getElementById('producto_id').value,
                     cantidad: parseFloat(document.getElementById('cantidad').value),
-                    costo_unitario: parseFloat(document.getElementById('costo_unitario').value)
+                    costo_unitario: parseFloat(document.getElementById('costo_unitario').value),
+                    fecha: document.getElementById('fecha_real').value
                 })
             });
             const data = await res.json();
             msg.className = `px-4 py-3 rounded-lg text-sm font-medium block mt-4 ${res.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`;
             msg.textContent = res.ok ? '✅ Lote registrado con éxito.' : `❌ ${data.error}`;
-            if(res.ok) document.getElementById('form-entrada').reset();
+            if(res.ok) {
+                document.getElementById('form-entrada').reset();
+                document.getElementById('fecha_real').valueAsDate = new Date();
+            }
         } catch (error) { console.error(error); }
     });
 

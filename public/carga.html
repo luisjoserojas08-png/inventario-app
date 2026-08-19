@@ -1,25 +1,135 @@
-<main class="p-8">
-  <h2 class="text-2xl font-bold mb-6">Carga Masiva de Datos</h2>
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-    <!-- Repite este bloque para Productos, Categorías e Inventario -->
-    <div class="bg-white p-6 rounded-lg border">
-      <h3 class="font-bold mb-4">Cargar Productos (Excel)</h3>
-      <input type="file" id="file-productos" accept=".xlsx" class="mb-4">
-      <button onclick="subir('productos')" class="bg-blue-600 text-white px-4 py-2 rounded">Subir Excel</button>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERP - Carga Masiva de Datos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = { theme: { extend: { colors: { corporate: { dark: '#0f172a', primary: '#1e40af', light: '#f8fafc', border: '#e2e8f0' } } } } }
+    </script>
+</head>
+<body class="bg-corporate-light font-sans text-slate-800 subpixel-antialiased">
+
+  <script>
+    const token = localStorage.getItem('erp_token') || localStorage.getItem('token');
+    if (!token) window.location.href = 'login.html';
+    function parseJwt(token) { try { return JSON.parse(atob(token.split('.')[1])); } catch (e) { return null; } }
+    const currentUser = parseJwt(token);
+  </script>
+
+  <div class="flex h-screen overflow-hidden">
+    <!-- Sidebar -->
+    <aside class="w-64 bg-corporate-dark text-slate-300 flex flex-col hidden md:flex">
+      <div class="p-6 text-xl font-bold text-white tracking-wider border-b border-slate-800">
+        <span>ERP Genética</span>
+      </div>
+      <nav class="flex-1 p-4 space-y-2">
+        <a href="index.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📊 Dashboard Inventario</a>
+        <a href="entradas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📥 Registro de Compras</a>
+        <a href="salidas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📤 Registro de Salidas</a>
+        <a href="reportes.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📑 Historial y Reportes</a>
+        <a href="categorias.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🏷️ Categorías y Almacén</a>
+        <a href="carga.html" class="block px-4 py-2.5 rounded-lg bg-corporate-primary text-white font-medium shadow-xs">📂 Carga Masiva</a>
+        <a href="usuarios.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">👥 Gestión de Usuarios</a>
+        <a href="auditoria.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🛡️ Auditoría del Sistema</a>
+      </nav>
+      <div class="p-4 border-t border-slate-800 text-xs text-slate-500">Sesión Activa • Neon DB</div>
+    </aside>
+
+    <!-- Main Content -->
+    <div class="flex-1 flex flex-col overflow-y-auto">
+      <header class="bg-white border-b h-16 flex items-center justify-between px-8 shadow-xs">
+        <h1 class="text-lg font-semibold text-slate-700">Módulo de Carga Masiva (Excel)</h1>
+        <button onclick="localStorage.clear(); window.location.href='login.html'" class="text-sm text-red-600 font-medium bg-red-50 px-3 py-1.5 rounded-lg">Cerrar Sesión</button>
+      </header>
+
+      <main class="p-8">
+        <div class="mb-6 bg-blue-50 border border-blue-200 p-4 rounded-xl text-sm text-blue-800">
+          💡 <strong>Nota de uso:</strong> Asegúrate de que tus archivos Excel (.xlsx) contengan las columnas exactas (SKU, NOMBRE, CANTIDAD, COSTO, etc.) antes de procesarlos.
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          
+          <!-- Card Productos -->
+          <div class="bg-white p-6 rounded-xl border border-corporate-border shadow-xs flex flex-col justify-between">
+            <div>
+              <h3 class="font-bold text-slate-700 mb-2">Cargar Productos</h3>
+              <p class="text-xs text-slate-500 mb-4">Sube un Excel con la lista del catálogo de productos y sus unidades de medida.</p>
+              <input type="file" id="file-productos" accept=".xlsx" class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-corporate-primary hover:file:bg-blue-100 mb-4">
+            </div>
+            <button onclick="subir('productos')" class="w-full bg-corporate-primary text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 transition shadow-xs">Subir Productos</button>
+          </div>
+
+          <!-- Card Categorías -->
+          <div class="bg-white p-6 rounded-xl border border-corporate-border shadow-xs flex flex-col justify-between">
+            <div>
+              <h3 class="font-bold text-slate-700 mb-2">Cargar Categorías</h3>
+              <p class="text-xs text-slate-500 mb-4">Sube un Excel con las categorías de los artículos y los almacenes asociados.</p>
+              <input type="file" id="file-categorias" accept=".xlsx" class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-corporate-primary hover:file:bg-blue-100 mb-4">
+            </div>
+            <button onclick="subir('categorias')" class="w-full bg-corporate-primary text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 transition shadow-xs">Subir Categorías</button>
+          </div>
+
+          <!-- Card Inventario -->
+          <div class="bg-white p-6 rounded-xl border border-corporate-border shadow-xs flex flex-col justify-between">
+            <div>
+              <h3 class="font-bold text-slate-700 mb-2">Inventario Inicial</h3>
+              <p class="text-xs text-slate-500 mb-4">Sube los lotes iniciales con sus existencias, dos decimales y costos unitarios.</p>
+              <input type="file" id="file-inventario" accept=".xlsx" class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 mb-4">
+            </div>
+            <button onclick="subir('inventario')" class="w-full bg-emerald-600 text-white py-2.5 rounded-lg font-medium hover:bg-emerald-700 transition shadow-xs">Subir Inventario</button>
+          </div>
+
+        </div>
+
+        <div id="resultado-msg" class="hidden mt-6 p-4 rounded-xl text-sm font-medium"></div>
+      </main>
     </div>
   </div>
-</main>
 
-<script>
-async function subir(tipo) {
-    const file = document.getElementById(`file-${tipo}`).files[0];
-    const formData = new FormData();
-    formData.append('file', file);
-    const res = await fetch(`/api/cargar-masiva/${tipo}`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: formData
-    });
-    alert((await res.json()).mensaje || "Error");
-}
-</script>
+  <script>
+    if (currentUser && currentUser.rol !== 'Administrador') {
+      document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+    }
+
+    async function subir(tipo) {
+        const fileInput = document.getElementById(`file-${tipo}`);
+        const msg = document.getElementById('resultado-msg');
+        
+        if (!fileInput.files[0]) {
+            msg.className = "mt-6 p-4 rounded-xl text-sm font-medium bg-amber-50 text-amber-700 block";
+            msg.textContent = "⚠️ Por favor selecciona un archivo Excel primero.";
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+        
+        msg.className = "mt-6 p-4 rounded-xl text-sm font-medium bg-blue-50 text-blue-700 block";
+        msg.textContent = "⏳ Procesando archivo y actualizando la base de datos...";
+
+        try {
+            const res = await fetch(`/api/cargar-masiva/${tipo}`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: formData
+            });
+            const data = await res.json();
+            
+            if (res.ok) {
+                msg.className = "mt-6 p-4 rounded-xl text-sm font-medium bg-emerald-50 text-emerald-700 block";
+                msg.textContent = `✅ ${data.mensaje}`;
+                fileInput.value = '';
+            } else {
+                msg.className = "mt-6 p-4 rounded-xl text-sm font-medium bg-red-50 text-red-700 block";
+                msg.textContent = `❌ Error: ${data.error}`;
+            }
+        } catch (e) {
+            msg.className = "mt-6 p-4 rounded-xl text-sm font-medium bg-red-50 text-red-700 block";
+            msg.textContent = "❌ Error de conexión con el servidor.";
+        }
+    }
+  </script>
+</body>
+</html>

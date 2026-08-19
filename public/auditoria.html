@@ -14,7 +14,19 @@
     if (!token) window.location.href = 'login.html';
     function parseJwt(t) { try { return JSON.parse(atob(t.split('.')[1])); } catch (e) { return null; } }
     const currentUser = parseJwt(token);
-    if (!currentUser || currentUser.rol !== 'Administrador') window.location.href = 'index.html';
+    if (currentUser) {
+      // 1. Ocultar Gestión de Usuarios a todos menos al rol 'Master'
+      if (currentUser.rol !== 'Master') {
+        document.querySelectorAll('.master-only').forEach(el => el.style.display = 'none');
+      }
+      
+      // 2. Bloqueo visual para el rol 'Consulta' (Solo lectura - esconde formularios y botones de acción)
+      if (currentUser.rol === 'Consulta') {
+        document.querySelectorAll('form button[type="submit"]').forEach(el => el.style.display = 'none');
+        document.querySelectorAll('button[onclick*="prepararEdicion"]').forEach(el => el.style.display = 'none');
+        document.querySelectorAll('button[onclick*="guardar"]').forEach(el => el.style.display = 'none');
+      }
+    }
   </script>
 
   <div class="flex h-screen overflow-hidden relative">

@@ -6,20 +6,7 @@
     <title>ERP - Gestión de Usuarios</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            colors: {
-              corporate: {
-                dark: '#0f172a',
-                primary: '#1e40af',
-                light: '#f8fafc',
-                border: '#e2e8f0'
-              }
-            }
-          }
-        }
-      }
+      tailwind.config = { theme: { extend: { colors: { corporate: { dark: '#0f172a', primary: '#1e40af', light: '#f8fafc', border: '#e2e8f0' } } } } }
     </script>
 </head>
 <body class="bg-corporate-light font-sans text-slate-800 subpixel-antialiased">
@@ -27,273 +14,125 @@
   <script>
     const token = localStorage.getItem('erp_token') || localStorage.getItem('token');
     if (!token) window.location.href = 'login.html';
-
-    function parseJwt(token) {
-        try { return JSON.parse(atob(token.split('.')[1])); } catch (e) { return null; }
-    }
+    function parseJwt(t) { try { return JSON.parse(atob(t.split('.')[1])); } catch (e) { return null; } }
     const currentUser = parseJwt(token);
-    const userRole = currentUser ? currentUser.rol : 'Consulta';
-
-    if (userRole !== 'Administrador') {
-        alert('Acceso restringido: Solo los Administradores pueden gestionar usuarios.');
+    
+    
+    // BLINDAJE: Solo el "Master" puede ver y usar esta pantalla
+    if (currentUser && currentUser.rol !== 'Master') {
         window.location.href = 'index.html';
     }
   </script>
 
   <div class="flex h-screen overflow-hidden">
-    
-    <!-- Barra Lateral -->
+    <!-- Sidebar -->
     <aside class="w-64 bg-corporate-dark text-slate-300 flex flex-col hidden md:flex">
-      <div class="p-6 text-xl font-bold text-white tracking-wider border-b border-slate-800 flex items-center space-x-2">
-        <span>ERP Genética</span>
-      </div>
-<nav class="flex-1 p-4 space-y-2 overflow-y-auto">
+      <div class="p-6 text-xl font-bold text-white tracking-wider border-b border-slate-800">ERP Genética</div>
+      <nav class="flex-1 p-4 space-y-2 overflow-y-auto">
         <a href="index.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📊 Dashboard Inventario</a>
-        <a href="costeo.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">💰 Costeo de Existencias</a>
+        <a href="costeo.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">💰 Costeo de Existencias</a>
         <a href="productos.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📦 Maestro de Productos</a>
         <a href="entradas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📥 Registro de Compras</a>
         <a href="salidas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📤 Registro de Salidas</a>
         <a href="reportes.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📑 Historial y Reportes</a>
         <a href="categorias.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🏷️ Categorías y Almacén</a>
         <a href="carga.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📂 Carga Masiva</a>
-        <a href="usuarios.html" class="admin-only block px-4 py-2.5 rounded-lg bg-corporate-primary text-white font-medium shadow-xs">👥 Gestión de Usuarios</a>
-        <a href="auditoria.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🛡️ Auditoría del Sistema</a>
+        <a href="usuarios.html" class="master-only block px-4 py-2.5 rounded-lg bg-corporate-primary text-white font-medium shadow-xs">👥 Gestión de Usuarios</a>
+        <a href="auditoria.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🛡️ Auditoría del Sistema</a>
       </nav>
-      <div class="p-4 border-t border-slate-800 text-xs text-slate-500">Sesión Activa • Neon DB</div>
+      <div class="p-4 border-t border-slate-800 text-xs text-slate-500">Sesión Activa • Master</div>
     </aside>
 
-    <!-- Contenido Principal -->
     <div class="flex-1 flex flex-col overflow-y-auto">
-      
-      <header class="bg-white border-b border-corporate-border h-16 flex items-center justify-between px-8 shadow-xs">
-        <h1 class="text-lg font-semibold text-slate-700">Administración de Usuarios y Permisos</h1>
-        <button onclick="cerrarSesion()" class="text-sm text-red-600 hover:text-red-800 font-medium bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition">Cerrar Sesión</button>
+      <header class="bg-white border-b h-16 flex items-center justify-between px-8 shadow-xs">
+        <h1 class="text-lg font-semibold text-slate-700">Panel de Control: Gestión de Accesos</h1>
+        <button onclick="localStorage.clear(); window.location.href='login.html'" class="text-sm text-red-600 font-medium bg-red-50 px-3 py-1.5 rounded-lg">Cerrar Sesión</button>
       </header>
 
-      <main class="p-8 grid grid-cols-1 xl:grid-cols-3 gap-8">
-        
-        <!-- Formulario de Registro / Edición -->
-        <div class="bg-white rounded-xl border border-corporate-border shadow-xs overflow-hidden h-fit">
-          <div class="px-6 py-4 border-b border-corporate-border bg-slate-50 flex justify-between items-center">
-            <h3 id="form-titulo" class="font-bold text-slate-700">Registrar Nuevo Usuario</h3>
-            <button type="button" id="btn-cancelar" onclick="limpiarFormulario()" class="hidden text-xs text-red-600 hover:underline font-medium">Cancelar Edición</button>
-          </div>
-          
-          <div class="p-6">
-            <form id="form-usuario" class="space-y-4">
-              <input type="hidden" id="edit-id">
-              
-              <div>
-                <label class="block text-sm font-medium text-slate-700 mb-1">Nombre Completo</label>
-                <input type="text" id="nombre" required class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-corporate-primary" placeholder="Ej. Luis Rojas">
-              </div>
-
-              <div>
-                <label class="block text-sm font-medium text-slate-700 mb-1">Correo Electrónico</label>
-                <input type="email" id="correo" required class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-corporate-primary" placeholder="correo@empresa.com">
-              </div>
-
-              <div id="password-container">
-                <label class="block text-sm font-medium text-slate-700 mb-1">Contraseña</label>
-                <input type="password" id="password" required class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-corporate-primary" placeholder="••••••••">
-                <p id="password-help" class="text-xs text-slate-400 mt-1">Obligatoria para nuevos usuarios.</p>
-              </div>
-
-              <div>
-                <label class="block text-sm font-medium text-slate-700 mb-1">Nivel de Permisos (Rol)</label>
-                <select id="rol" required class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none bg-white focus:ring-2 focus:ring-corporate-primary">
-                  <option value="Administrador">Administrador</option>
-                  <option value="Supervisor">Supervisor / Operario</option>
-                  <option value="Consulta">Consulta</option>
-                </select>
-              </div>
-
-              <div id="mensaje-estado" class="hidden px-4 py-3 rounded-lg text-sm font-medium"></div>
-
-              <div class="pt-2 flex justify-end">
-                <button type="submit" id="btn-submit" class="bg-corporate-primary hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-medium transition shadow-xs">
-                  Crear Usuario
-                </button>
-              </div>
-            </form>
-          </div>
+      <main class="p-8 flex flex-col lg:flex-row gap-8">
+        <!-- Crear Usuario -->
+        <div class="w-full lg:w-1/3 bg-white rounded-xl border border-corporate-border p-6 shadow-xs h-fit">
+          <h3 class="font-bold text-slate-700 border-b pb-3 mb-4">Crear Nuevo Perfil</h3>
+          <form id="form-user" class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium mb-1">Nombre Completo</label>
+              <input type="text" id="nombre" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary">
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1">Nombre de Usuario (Login)</label>
+              <input type="text" id="usuario" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary" placeholder="Ej: lrojas">
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1">Contraseña Inicial</label>
+              <input type="password" id="password" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary">
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1">Rol en el Sistema</label>
+              <select id="rol" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary">
+                <option value="Consulta">Consulta (Solo Lectura)</option>
+                <option value="Operario">Operario (Entradas/Salidas/Costos)</option>
+                <option value="Administrador">Administrador (Mantenimiento)</option>
+                <option value="Master">Master (Acceso Total)</option>
+              </select>
+            </div>
+            <div id="msg" class="hidden px-4 py-3 rounded-lg text-sm font-medium"></div>
+            <button type="submit" class="w-full bg-corporate-primary text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 transition">Registrar Perfil</button>
+          </form>
         </div>
 
-        <!-- Tabla de Usuarios Registrados -->
-        <div class="xl:col-span-2 bg-white rounded-xl border border-corporate-border shadow-xs overflow-hidden h-fit">
-          <div class="px-6 py-4 border-b border-corporate-border bg-slate-50 flex justify-between items-center">
-            <h3 class="font-bold text-slate-700">Usuarios del Sistema</h3>
-            <button onclick="cargarUsuarios()" class="text-sm text-corporate-primary hover:underline font-medium">Actualizar Lista</button>
-          </div>
-          <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse">
-              <thead>
-                <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-corporate-border">
-                  <th class="px-6 py-3 font-semibold">Nombre</th>
-                  <th class="px-6 py-3 font-semibold">Correo</th>
-                  <th class="px-6 py-3 font-semibold">Rol</th>
-                  <th class="px-6 py-3 font-semibold text-center">Acciones</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-corporate-border text-sm text-slate-600" id="tabla-usuarios">
-                <tr><td colspan="4" class="px-6 py-4 text-center text-slate-400">Cargando usuarios...</td></tr>
-              </tbody>
-            </table>
-          </div>
+        <!-- Tabla Usuarios -->
+        <div class="flex-1 bg-white rounded-xl border border-corporate-border shadow-xs overflow-hidden">
+          <div class="px-6 py-4 border-b bg-slate-50"><h3 class="font-bold text-slate-700">Perfiles Activos</h3></div>
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b">
+                <th class="px-6 py-3">Nombre</th><th class="px-6 py-3">Usuario (Login)</th><th class="px-6 py-3">Nivel de Acceso</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-usuarios" class="divide-y text-sm text-slate-600">
+              <tr><td colspan="3" class="px-6 py-6 text-center text-slate-400">Cargando...</td></tr>
+            </tbody>
+          </table>
         </div>
-
       </main>
     </div>
   </div>
 
   <script>
-    async function descargarReporte() {
-        try {
-            const res = await fetch('/api/reporte-salidas', { headers: { 'Authorization': `Bearer ${token}` } });
-            if (!res.ok) { alert("Error de sesión."); return; }
-            const blob = await res.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url; a.download = 'reporte_inventario.xlsx';
-            document.body.appendChild(a); a.click();
-            a.remove(); window.URL.revokeObjectURL(url);
-        } catch (error) { alert("Error al descargar Excel."); }
-    }
-
-    function cerrarSesion() {
-      localStorage.clear();
-      window.location.href = 'login.html';
-    }
-
-    // CARGAR LISTA DE USUARIOS
     async function cargarUsuarios() {
-      try {
-        const res = await fetch('/api/usuarios', { headers: { 'Authorization': `Bearer ${token}` } });
-        if (!res.ok) return;
-        const usuarios = await res.json();
-        const tbody = document.getElementById('tabla-usuarios');
-
-        if (!usuarios.length) {
-          tbody.innerHTML = `<tr><td colspan="4" class="px-6 py-4 text-center text-slate-400">No hay usuarios registrados.</td></tr>`;
-          return;
-        }
-
-        tbody.innerHTML = usuarios.map(u => `
-          <tr class="hover:bg-slate-50 transition">
-            <td class="px-6 py-4 font-medium text-slate-800">${u.nombre}</td>
-            <td class="px-6 py-4">${u.correo}</td>
-            <td class="px-6 py-4">
-              <span class="px-2.5 py-1 rounded-full text-xs font-semibold ${u.rol === 'Administrador' ? 'bg-purple-50 text-purple-700' : u.rol === 'Supervisor' ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-700'}">
-                ${u.rol}
-              </span>
-            </td>
-            <td class="px-6 py-4 text-center space-x-2">
-              <button onclick="prepararEdicion(${u.id}, '${u.nombre}', '${u.correo}', '${u.rol}')" class="text-blue-600 hover:text-blue-800 font-medium text-xs bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded transition">Editar / Clave</button>
-              <button onclick="eliminarUsuario(${u.id}, '${u.correo}')" class="text-red-600 hover:text-red-800 font-medium text-xs bg-red-50 hover:bg-red-100 px-2.5 py-1.5 rounded transition">Eliminar</button>
-            </td>
-          </tr>
-        `).join('');
-      } catch (err) { console.error("Error al cargar usuarios", err); }
+        try {
+            const res = await fetch('/api/usuarios', { headers: { 'Authorization': `Bearer ${token}` } });
+            const usuarios = await res.json();
+            document.getElementById('tabla-usuarios').innerHTML = usuarios.map(u => `
+                <tr class="hover:bg-slate-50">
+                    <td class="px-6 py-4 font-bold text-slate-800">${u.nombre}</td>
+                    <td class="px-6 py-4 font-mono text-slate-500">@${u.usuario}</td>
+                    <td class="px-6 py-4"><span class="bg-blue-50 text-blue-700 px-2 py-1 rounded-full text-xs font-semibold">${u.rol}</span></td>
+                </tr>
+            `).join('');
+        } catch (e) { console.error(e); }
     }
 
-    // PREPARAR FORMULARIO PARA EDITAR
-    function prepararEdicion(id, nombre, correo, rol) {
-      document.getElementById('edit-id').value = id;
-      document.getElementById('nombre').value = nombre;
-      document.getElementById('correo').value = correo;
-      document.getElementById('rol').value = rol;
-      
-      // Contraseña opcional al editar
-      document.getElementById('password').required = false;
-      document.getElementById('password').value = '';
-      document.getElementById('password-help').textContent = 'Dejar en blanco si no deseas cambiar la contraseña.';
-      
-      document.getElementById('form-titulo').textContent = 'Editar Usuario / Restablecer Clave';
-      document.getElementById('btn-submit').textContent = 'Guardar Cambios';
-      document.getElementById('btn-cancelar').classList.remove('hidden');
-    }
-
-    function limpiarFormulario() {
-      document.getElementById('form-usuario').reset();
-      document.getElementById('edit-id').value = '';
-      document.getElementById('password').required = true;
-      document.getElementById('password-help').textContent = 'Obligatoria para nuevos usuarios.';
-      document.getElementById('form-titulo').textContent = 'Registrar Nuevo Usuario';
-      document.getElementById('btn-submit').textContent = 'Crear Usuario';
-      document.getElementById('btn-cancelar').classList.add('hidden');
-    }
-
-    // CREAR O ACTUALIZAR USUARIO
-    document.getElementById('form-usuario').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const editId = document.getElementById('edit-id').value;
-      const btn = document.getElementById('btn-submit');
-      const mensajeDiv = document.getElementById('mensaje-estado');
-      
-      const nombre = document.getElementById('nombre').value.trim();
-      const correo = document.getElementById('correo').value.trim();
-      const password = document.getElementById('password').value.trim();
-      const rol = document.getElementById('rol').value;
-
-      btn.disabled = true;
-      btn.innerHTML = 'Procesando...';
-      mensajeDiv.className = 'hidden';
-
-      const url = editId ? `/api/usuarios/${editId}` : '/api/usuarios';
-      const method = editId ? 'PUT' : 'POST';
-      
-      const bodyData = { nombre, correo, rol };
-      if (password) bodyData.password = password; // Solo se envía si se escribió una nueva
-
-      try {
-        const respuesta = await fetch(url, {
-          method: method,
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify(bodyData)
-        });
-
-        const data = await respuesta.json();
-
-        if (respuesta.ok) {
-          mensajeDiv.textContent = editId ? '✅ Usuario actualizado correctamente.' : '✅ Usuario creado exitosamente.';
-          mensajeDiv.className = 'px-4 py-3 rounded-lg text-sm font-medium bg-emerald-50 text-emerald-700 block mt-4';
-          limpiarFormulario();
-          cargarUsuarios();
-        } else {
-          mensajeDiv.textContent = '❌ ' + (data.error || 'No se pudo procesar la solicitud');
-          mensajeDiv.className = 'px-4 py-3 rounded-lg text-sm font-medium bg-red-50 text-red-700 block mt-4';
-        }
-      } catch (error) {
-        mensajeDiv.textContent = '❌ Error de red con el servidor.';
-        mensajeDiv.className = 'px-4 py-3 rounded-lg text-sm font-medium bg-red-50 text-red-700 block mt-4';
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = editId ? 'Guardar Cambios' : 'Crear Usuario';
-      }
+    document.getElementById('form-user').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const msg = document.getElementById('msg');
+        try {
+            const res = await fetch('/api/usuarios', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ 
+                    nombre: document.getElementById('nombre').value, 
+                    usuario: document.getElementById('usuario').value, 
+                    password: document.getElementById('password').value, 
+                    rol: document.getElementById('rol').value 
+                })
+            });
+            const data = await res.json();
+            msg.className = `px-4 py-3 rounded-lg text-sm font-medium block mt-4 ${res.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`;
+            msg.textContent = res.ok ? '✅ Perfil registrado.' : `❌ ${data.error}`;
+            if(res.ok) { document.getElementById('form-user').reset(); cargarUsuarios(); }
+        } catch (error) { console.error(error); }
     });
-
-    // ELIMINAR USUARIO
-    async function eliminarUsuario(id, correo) {
-      if (!confirm(`¿Estás seguro de eliminar al usuario ${correo}?`)) return;
-
-      try {
-        const res = await fetch(`/api/usuarios/${id}`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await res.json();
-
-        if (res.ok) {
-          alert('✅ Usuario eliminado correctamente.');
-          cargarUsuarios();
-        } else {
-          alert('❌ ' + (data.error || 'No se pudo eliminar'));
-        }
-      } catch (err) {
-        alert('❌ Error de conexión al intentar eliminar.');
-      }
-    }
-
     cargarUsuarios();
   </script>
 </body>

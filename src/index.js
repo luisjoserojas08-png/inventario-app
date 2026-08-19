@@ -16,384 +16,247 @@ app.use(express.static(path.join(__dirname, '../public')));
 
 app.get('/', (req, res) => res.redirect('/login.html'));
 
-// Middleware de autenticación por Token
+// --- MIDDLEWARES ---
 function verificarToken(req, res, next) {
     const authHeader = req.headers['authorization'];
     if (!authHeader) return res.status(401).json({ error: 'Token requerido' });
     const token = authHeader.split(' ')[1];
-    if (!token) return res.status(401).json({ error: 'Formato de token inválido' });
-
     jwt.verify(token, JWT_SECRET, (err, user) => {
-        if (err) return res.status(403).json({ error: 'Token inválido o expirado' });
+        if (err) return res.status(403).json({ error: 'Token inválido' });
         req.user = user;
         next();
     });
 }
 
-// Middleware de control de roles (RBAC)
 function verificarRol(rolesPermitidos) {
     return (req, res, next) => {
         if (!req.user || !rolesPermitidos.includes(req.user.rol)) {
-            return res.status(403).json({ error: 'Acceso denegado: No tienes permisos suficientes.' });
+            return res.status(403).json({ error: 'Acceso denegado' });
         }
         next();
     };
 }
 
-// 1. REGISTRO DE USUARIOS (Solo Admin)
+// --- AUTENTICACIÓN ---
+app.post('/api/login', async (req, res) => {
+    const { correo, password } = req.body;
+    try {
+        const resdb = await pool.query('SELECT * FROM usuarios WHERE correo = $1', [correo]);
+        if (resdb.rows.length === 0) return res.status(400).json({ error: 'Credenciales incorrectas' });
+        const user = resdb.rows[0];
+        if (!(await bcrypt.compare(password, user.password))) return res.status(400).json({ error: 'Credenciales incorrectas' });
+        
+        const token = jwt.sign({ id: user.id, rol: user.rol }, JWT_SECRET, { expiresIn: '8h' });
+        res.json({ token, usuario: { id: user.id, nombre: user.nombre, rol: user.rol } });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// --- GESTIÓN USUARIOS ---
 app.post('/api/usuarios', verificarToken, verificarRol(['Administrador']), async (req, res) => {
     const { nombre, correo, password, rol } = req.body;
-    try {
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const query = `INSERT INTO usuarios (nombre, correo, password, rol) VALUES ($1, $2, $3, $4) RETURNING id, nombre, correo, rol`;
-        const nuevoUsuario = await pool.query(query, [nombre, correo, hashedPassword, rol || 'Consulta']);
-        res.status(201).json({ mensaje: 'Usuario registrado con éxito', usuario: nuevoUsuario.rows[0] });
-    } catch (error) {
-        res.status(500).json({ error: 'El correo ya está registrado o hubo un error' });
-    }
+    const hash = await bcrypt.hash(password, 10);
+    await pool.query('INSERT INTO usuarios (nombre, correo, password, rol) VALUES ($1, $2, $3, $4)', [nombre, correo, hash, rol]);
+    res.status(201).json({ mensaje: 'Usuario creado' });
 });
 
-// LISTAR USUARIOS (Solo Admin)
 app.get('/api/usuarios', verificarToken, verificarRol(['Administrador']), async (req, res) => {
-    try {
-        const resultado = await pool.query('SELECT id, nombre, correo, rol FROM usuarios ORDER BY nombre ASC');
-        res.json(resultado.rows);
-    } catch (error) {
-        res.status(500).json({ error: 'Error al consultar usuarios' });
-    }
+    const resdb = await pool.query('SELECT id, nombre, correo, rol FROM usuarios ORDER BY nombre ASC');
+    res.json(resdb.rows);
 });
 
-// EDITAR USUARIO / RESTABLECER CLAVE (Solo Admin)
 app.put('/api/usuarios/:id', verificarToken, verificarRol(['Administrador']), async (req, res) => {
     const { id } = req.params;
     const { nombre, correo, password, rol } = req.body;
     try {
         if (password && password.trim() !== "") {
             const hashedPassword = await bcrypt.hash(password, 10);
-            await pool.query(
-                `UPDATE usuarios SET nombre = $1, correo = $2, password = $3, rol = $4 WHERE id = $5`,
-                [nombre, correo, hashedPassword, rol, id]
-            );
+            await pool.query(`UPDATE usuarios SET nombre = $1, correo = $2, password = $3, rol = $4 WHERE id = $5`, [nombre, correo, hashedPassword, rol, id]);
         } else {
-            await pool.query(
-                `UPDATE usuarios SET nombre = $1, correo = $2, rol = $3 WHERE id = $4`,
-                [nombre, correo, rol, id]
-            );
+            await pool.query(`UPDATE usuarios SET nombre = $1, correo = $2, rol = $3 WHERE id = $4`, [nombre, correo, rol, id]);
         }
         res.json({ mensaje: 'Usuario actualizado con éxito' });
-    } catch (error) {
-        res.status(500).json({ error: 'Error al actualizar el usuario' });
-    }
+    } catch (error) { res.status(500).json({ error: 'Error al actualizar' }); }
 });
 
-// ELIMINAR USUARIO (Solo Admin)
 app.delete('/api/usuarios/:id', verificarToken, verificarRol(['Administrador']), async (req, res) => {
     const { id } = req.params;
-    try {
-        if (req.user.id == id) {
-            return res.status(400).json({ error: 'No puedes eliminar tu propia cuenta de administrador.' });
-        }
-        await pool.query('DELETE FROM usuarios WHERE id = $1', [id]);
-        res.json({ mensaje: 'Usuario eliminado correctamente' });
-    } catch (error) {
-        res.status(500).json({ error: 'Error al eliminar el usuario' });
-    }
+    if (req.user.id == id) return res.status(400).json({ error: 'No puedes eliminar tu propia cuenta.' });
+    await pool.query('DELETE FROM usuarios WHERE id = $1', [id]);
+    res.json({ mensaje: 'Usuario eliminado' });
 });
 
-// 2. LOGIN
-app.post('/api/login', async (req, res) => {
-    const { correo, password } = req.body;
-    try {
-        const resultado = await pool.query('SELECT * FROM usuarios WHERE correo = $1', [correo]);
-        if (resultado.rows.length === 0) return res.status(400).json({ error: 'Credenciales incorrectas' });
-
-        const usuario = resultado.rows[0];
-        const passwordValido = await bcrypt.compare(password, usuario.password);
-        if (!passwordValido) return res.status(400).json({ error: 'Credenciales incorrectas' });
-
-        const token = jwt.sign({ id: usuario.id, correo: usuario.correo, rol: usuario.rol }, JWT_SECRET, { expiresIn: '8h' });
-        res.json({ token, usuario: { id: usuario.id, nombre: usuario.nombre, correo: usuario.correo, rol: usuario.rol } });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// 3. DASHBOARD - INVENTARIO POR LOTES
-app.get('/api/inventario-lotes', verificarToken, async (req, res) => {
-    try {
-        const query = `
-            SELECT e.id AS lote_id, p.sku, p.nombre, c.nombre AS categoria_nombre, 
-                   e.stock_restante, e.costo_unitario
-            FROM entradas e
-            JOIN productos p ON e.producto_id = p.id
-            LEFT JOIN categorias c ON p.categoria_id = c.id
-            WHERE e.stock_restante > 0
-            ORDER BY p.nombre ASC, e.fecha ASC;
-        `;
-        const resultado = await pool.query(query);
-        res.json(resultado.rows);
-    } catch (error) {
-        res.status(500).json({ error: 'Error al consultar las existencias' });
-    }
-});
-
-// 4. CREAR PRODUCTO
-app.post('/api/productos', verificarToken, verificarRol(['Administrador', 'Supervisor']), async (req, res) => {
-    const { sku, nombre, categoria_id } = req.body;
-    try {
-        const query = `INSERT INTO productos (sku, nombre, categoria_id, stock_actual, stock_minimo, precio_costo) VALUES ($1, $2, $3, 0, 5, 0) RETURNING *`;
-        const resultado = await pool.query(query, [sku, nombre, categoria_id || 1]);
-        res.status(201).json({ mensaje: 'Producto creado', producto: resultado.rows[0] });
-    } catch (error) {
-        if (error.code === '23505') {
-            return res.status(400).json({ error: 'El código SKU ya está registrado en otro producto.' });
-        }
-        res.status(500).json({ error: 'Error al crear el producto' });
-    }
-});
-
-// 5. LISTAR PRODUCTOS
-app.get('/api/productos', verificarToken, async (req, res) => {
-    try {
-        const resultado = await pool.query('SELECT id, sku, nombre FROM productos ORDER BY nombre ASC');
-        res.json(resultado.rows);
-    } catch (error) {
-        res.status(500).json({ error: 'Error al listar productos' });
-    }
-});
-
-// 6. REGISTRAR LOTE (ENTRADAS)
-app.post('/api/entradas', verificarToken, verificarRol(['Administrador', 'Supervisor']), async (req, res) => {
-    const { producto_id, cantidad, costo_unitario } = req.body;
-    const client = await pool.connect();
-    try {
-        await client.query('BEGIN');
-        
-        await client.query(
-            `UPDATE productos SET stock_actual = stock_actual + $1, precio_costo = $2 WHERE id = $3`,
-            [cantidad, costo_unitario, producto_id]
-        );
-
-        const entradaResult = await client.query(
-            `INSERT INTO entradas (producto_id, cantidad, costo_unitario, stock_restante) VALUES ($1, $2, $3, $4) RETURNING id`,
-            [producto_id, cantidad, costo_unitario, cantidad]
-        );
-
-        await client.query('COMMIT');
-        res.status(201).json({ mensaje: 'Lote registrado con éxito', entradaId: entradaResult.rows[0].id });
-    } catch (error) {
-        await client.query('ROLLBACK');
-        res.status(500).json({ error: 'Error al procesar la entrada' });
-    } finally {
-        client.release();
-    }
-});
-
-// 6.1 REGISTRAR SALIDAS (FIFO - Descontando lotes activos)
-app.post('/api/salidas', verificarToken, verificarRol(['Administrador', 'Supervisor']), async (req, res) => {
-    const { producto_id, cantidad, concepto } = req.body;
-    const client = await pool.connect();
-    
-    try {
-        await client.query('BEGIN');
-        
-        let cantidadPendiente = parseInt(cantidad);
-
-        const lotesRes = await client.query(
-            `SELECT id, stock_restante FROM entradas WHERE producto_id = $1 AND stock_restante > 0 ORDER BY fecha ASC FOR UPDATE`,
-            [producto_id]
-        );
-
-        const stockTotalDisponible = lotesRes.rows.reduce((acc, lote) => acc + lote.stock_restante, 0);
-
-        if (stockTotalDisponible < cantidadPendiente) {
-            throw new Error(`Stock insuficiente. Stock disponible: ${stockTotalDisponible}, solicitado: ${cantidadPendiente}`);
-        }
-
-        await client.query(
-            `INSERT INTO salidas (producto_id, cantidad, concepto, fecha) VALUES ($1, $2, $3, NOW())`,
-            [producto_id, cantidad, concepto]
-        );
-
-        for (const lote of lotesRes.rows) {
-            if (cantidadPendiente <= 0) break;
-
-            if (lote.stock_restante >= cantidadPendiente) {
-                await client.query(
-                    `UPDATE entradas SET stock_restante = stock_restante - $1 WHERE id = $2`,
-                    [cantidadPendiente, lote.id]
-                );
-                cantidadPendiente = 0;
-            } else {
-                cantidadPendiente -= lote.stock_restante;
-                await client.query(
-                    `UPDATE entradas SET stock_restante = 0 WHERE id = $1`,
-                    [lote.id]
-                );
-            }
-        }
-
-        await client.query('COMMIT');
-        res.status(201).json({ mensaje: 'Salida registrada y lotes descontados correctamente' });
-    } catch (error) {
-        await client.query('ROLLBACK');
-        res.status(400).json({ error: error.message || 'Error al procesar salida' });
-    } finally {
-        client.release();
-    }
-});
-
-// 7. CATEGORÍAS
+// --- CATEGORÍAS Y ALMACENES ---
 app.post('/api/categorias', verificarToken, verificarRol(['Administrador']), async (req, res) => {
-    const { nombre } = req.body;
+    const { nombre, almacen } = req.body;
     try {
-        const resultado = await pool.query(`INSERT INTO categorias (nombre) VALUES ($1) RETURNING *`, [nombre]);
+        const resultado = await pool.query(
+            `INSERT INTO categorias (nombre, almacen) VALUES ($1, $2) RETURNING *`, 
+            [nombre, almacen || 'Almacén Principal']
+        );
         res.status(201).json({ mensaje: 'Categoría registrada', categoria: resultado.rows[0] });
-    } catch (error) {
-        res.status(500).json({ error: 'Error al registrar categoría' });
-    }
+    } catch (error) { res.status(500).json({ error: 'Error al registrar categoría' }); }
 });
 
 app.get('/api/categorias', verificarToken, async (req, res) => {
     try {
         const resultado = await pool.query('SELECT * FROM categorias ORDER BY nombre ASC');
         res.json(resultado.rows);
+    } catch (error) { res.status(500).json({ error: 'Error al consultar categorías' }); }
+});
+
+// --- PRODUCTOS (UNIDAD DE MEDIDA) ---
+app.post('/api/productos', verificarToken, verificarRol(['Administrador', 'Supervisor']), async (req, res) => {
+    const { sku, nombre, categoria_id, unidad_medida } = req.body;
+    try {
+        const query = `INSERT INTO productos (sku, nombre, categoria_id, unidad_medida, stock_actual, stock_minimo, precio_costo) VALUES ($1, $2, $3, $4, 0, 5, 0) RETURNING *`;
+        const resultado = await pool.query(query, [sku, nombre, categoria_id || 1, unidad_medida || 'uds']);
+        res.status(201).json({ mensaje: 'Producto creado', producto: resultado.rows[0] });
     } catch (error) {
-        res.status(500).json({ error: 'Error al consultar categorías' });
+        if (error.code === '23505') return res.status(400).json({ error: 'El SKU ya existe.' });
+        res.status(500).json({ error: 'Error al crear producto' });
     }
 });
 
-// 8. REPORTES HISTORIALES
+app.get('/api/productos', verificarToken, async (req, res) => {
+    const resdb = await pool.query('SELECT id, sku, nombre, unidad_medida FROM productos ORDER BY nombre ASC');
+    res.json(resdb.rows);
+});
+
+// --- INVENTARIO Y LOTES ---
+app.get('/api/inventario-lotes', verificarToken, async (req, res) => {
+    const query = `
+        SELECT e.id AS lote_id, p.sku, p.nombre, p.unidad_medida, c.nombre AS categoria_nombre, c.almacen,
+               e.stock_restante, e.costo_unitario
+        FROM entradas e
+        JOIN productos p ON e.producto_id = p.id
+        LEFT JOIN categorias c ON p.categoria_id = c.id
+        WHERE e.stock_restante > 0
+        ORDER BY p.nombre ASC, e.fecha ASC;
+    `;
+    const resdb = await pool.query(query);
+    res.json(resdb.rows);
+});
+
+// --- OPERACIONES: ENTRADAS Y SALIDAS (FIFO) ---
+app.post('/api/entradas', verificarToken, verificarRol(['Administrador', 'Supervisor']), async (req, res) => {
+    const { producto_id, cantidad, costo_unitario } = req.body;
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        await client.query('UPDATE productos SET stock_actual = stock_actual + $1 WHERE id = $2', [cantidad, producto_id]);
+        await client.query('INSERT INTO entradas (producto_id, cantidad, costo_unitario, stock_restante) VALUES ($1, $2, $3, $4)', [producto_id, cantidad, costo_unitario, cantidad]);
+        await client.query('COMMIT');
+        res.status(201).json({ mensaje: 'Lote registrado' });
+    } catch (e) { await client.query('ROLLBACK'); res.status(500).json({ error: e.message }); } finally { client.release(); }
+});
+
+app.post('/api/salidas', verificarToken, verificarRol(['Administrador', 'Supervisor']), async (req, res) => {
+    const { producto_id, cantidad, concepto } = req.body;
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        let cant = parseInt(cantidad);
+        const lotes = await client.query('SELECT id, stock_restante FROM entradas WHERE producto_id = $1 AND stock_restante > 0 ORDER BY fecha ASC FOR UPDATE', [producto_id]);
+        
+        if (lotes.rows.reduce((acc, l) => acc + l.stock_restante, 0) < cant) throw new Error('Stock insuficiente');
+
+        await client.query('INSERT INTO salidas (producto_id, cantidad, concepto, fecha) VALUES ($1, $2, $3, NOW())', [producto_id, cantidad, concepto]);
+        
+        for (let lote of lotes.rows) {
+            if (cant <= 0) break;
+            let aDescontar = Math.min(lote.stock_restante, cant);
+            await client.query('UPDATE entradas SET stock_restante = stock_restante - $1 WHERE id = $2', [aDescontar, lote.id]);
+            cant -= aDescontar;
+        }
+        await client.query('COMMIT');
+        res.status(201).json({ mensaje: 'Salida registrada' });
+    } catch (e) { await client.query('ROLLBACK'); res.status(400).json({ error: e.message }); } finally { client.release(); }
+});
+
+// --- ADMIN: ELIMINAR CON LOG ---
+app.delete('/api/admin/movimientos/:tipo/:id', verificarToken, verificarRol(['Administrador']), async (req, res) => {
+    const { tipo, id } = req.params;
+    const tabla = tipo === 'entrada' ? 'entradas' : 'salidas';
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const reg = await client.query(`SELECT * FROM ${tabla} WHERE id = $1`, [id]);
+        if (reg.rows.length === 0) throw new Error('Registro no encontrado');
+        
+        if (tabla === 'salidas') await client.query('UPDATE productos SET stock_actual = stock_actual + $1 WHERE id = $2', [reg.rows[0].cantidad, reg.rows[0].producto_id]);
+        
+        await client.query('INSERT INTO logs_auditoria (usuario_id, accion, tabla_afectada, registro_id, detalles) VALUES ($1, $2, $3, $4, $5)', 
+            [req.user.id, 'BORRADO', tabla, id, JSON.stringify(reg.rows[0])]);
+        
+        await client.query(`DELETE FROM ${tabla} WHERE id = $1`, [id]);
+        await client.query('COMMIT');
+        res.json({ mensaje: 'Eliminado con log' });
+    } catch (e) { await client.query('ROLLBACK'); res.status(500).json({ error: e.message }); } finally { client.release(); }
+});
+
+// --- REPORTES Y AUDITORÍA ---
+app.get('/api/reporte/logs', verificarToken, verificarRol(['Administrador']), async (req, res) => {
+    const resdb = await pool.query('SELECT l.*, u.nombre AS usuario_nombre FROM logs_auditoria l JOIN usuarios u ON l.usuario_id = u.id ORDER BY l.fecha DESC LIMIT 100');
+    res.json(resdb.rows);
+});
+
 app.get('/api/reporte/entradas', verificarToken, async (req, res) => {
     try {
         const query = `
-            SELECT e.id, p.sku, p.nombre AS producto_nombre, e.cantidad, e.costo_unitario, e.stock_restante, e.fecha
+            SELECT e.id, p.sku, p.nombre AS producto_nombre, p.unidad_medida, 
+                   c.almacen, e.cantidad, e.costo_unitario, e.stock_restante, e.fecha
             FROM entradas e
             JOIN productos p ON e.producto_id = p.id
+            LEFT JOIN categorias c ON p.categoria_id = c.id
             ORDER BY e.fecha DESC;
         `;
         const resultado = await pool.query(query);
         res.json(resultado.rows);
-    } catch (error) {
-        res.status(500).json({ error: 'Error al consultar el historial de entradas' });
-    }
+    } catch (error) { res.status(500).json({ error: 'Error al consultar historial de entradas' }); }
 });
 
 app.get('/api/reporte/salidas', verificarToken, async (req, res) => {
     try {
         const query = `
-            SELECT s.id, p.sku, p.nombre AS producto_nombre, s.cantidad, s.concepto, s.fecha
+            SELECT s.id, p.sku, p.nombre AS producto_nombre, p.unidad_medida, 
+                   c.almacen, s.cantidad, s.concepto, s.fecha
             FROM salidas s
             JOIN productos p ON s.producto_id = p.id
+            LEFT JOIN categorias c ON p.categoria_id = c.id
             ORDER BY s.fecha DESC;
         `;
         const resultado = await pool.query(query);
         res.json(resultado.rows);
-    } catch (error) {
-        res.status(500).json({ error: 'Error al consultar el historial de salidas' });
-    }
+    } catch (error) { res.status(500).json({ error: 'Error al consultar historial de salidas' }); }
 });
 
-// 9. DESCARGAR REPORTE EXCEL (Con ID de Lote)
 app.get('/api/reporte-salidas', verificarToken, async (req, res) => {
-    try {
-        const workbook = new ExcelJS.Workbook();
-        const worksheet = workbook.addWorksheet('Inventario por Lotes');
-        worksheet.columns = [
-            { header: 'SKU', key: 'sku', width: 15 },
-            { header: 'Producto', key: 'nombre', width: 30 },
-            { header: 'Lote ID', key: 'lote_id', width: 15 },
-            { header: 'Categoría', key: 'categoria_nombre', width: 20 },
-            { header: 'Stock Restante', key: 'stock_restante', width: 15 },
-            { header: 'Costo Unitario ($)', key: 'costo_unitario', width: 18 }
-        ];
-
-        const query = `
-            SELECT p.sku, p.nombre, e.id AS lote_id, c.nombre AS categoria_nombre, 
-                   e.stock_restante, e.costo_unitario
-            FROM entradas e
-            JOIN productos p ON e.producto_id = p.id
-            LEFT JOIN categorias c ON p.categoria_id = c.id
-            WHERE e.stock_restante > 0
-            ORDER BY p.nombre ASC;
-        `;
-        const resultado = await pool.query(query);
-        worksheet.addRows(resultado.rows);
-
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.setHeader('Content-Disposition', 'attachment; filename="reporte_inventario_lotes.xlsx"');
-        await workbook.xlsx.write(res);
-        res.end();
-    } catch (error) {
-        res.status(500).json({ error: 'Error al generar reporte' });
-    }
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Inventario General');
+    ws.columns = [
+        { header: 'SKU', key: 'sku', width: 15 }, 
+        { header: 'Producto', key: 'nombre', width: 30 }, 
+        { header: 'Categoría', key: 'categoria_nombre', width: 20 },
+        { header: 'Almacén', key: 'almacen', width: 25 },
+        { header: 'Lote ID', key: 'lote_id', width: 15 }, 
+        { header: 'Stock Restante', key: 'stock_restante', width: 15 },
+        { header: 'UoM (Medida)', key: 'unidad_medida', width: 15 },
+        { header: 'Costo Unitario ($)', key: 'costo_unitario', width: 18 }
+    ];
+    const resdb = await pool.query(`
+        SELECT p.sku, p.nombre, p.unidad_medida, c.nombre AS categoria_nombre, c.almacen,
+               e.id AS lote_id, e.stock_restante, e.costo_unitario 
+        FROM entradas e 
+        JOIN productos p ON e.producto_id = p.id 
+        LEFT JOIN categorias c ON p.categoria_id = c.id
+        WHERE e.stock_restante > 0
+        ORDER BY c.almacen ASC, p.nombre ASC
+    `);
+    ws.addRows(resdb.rows);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="reporte_inventario_general.xlsx"');
+    await wb.xlsx.write(res);
+    res.end();
 });
 
-app.listen(PORT, () => console.log(`Servidor en puerto ${PORT} blindado y seguro`));
-// 10. ELIMINAR O EDITAR ENTRADAS/SALIDAS (Solo Admin)
-app.delete('/api/admin/movimientos/:tipo/:id', verificarToken, verificarRol(['Administrador']), async (req, res) => {
-    const { tipo, id } = req.params;
-    const tabla = tipo === 'entrada' ? 'entradas' : 'salidas';
-    
-    const client = await pool.connect();
-    try {
-        await client.query('BEGIN');
-        
-        // Si es salida, debemos revertir el stock en productos
-        if (tabla === 'salidas') {
-            const mov = await client.query('SELECT producto_id, cantidad FROM salidas WHERE id = $1', [id]);
-            if (mov.rows.length > 0) {
-                await client.query('UPDATE productos SET stock_actual = stock_actual + $1 WHERE id = $2', 
-                    [mov.rows[0].cantidad, mov.rows[0].producto_id]);
-            }
-        }
-        
-        await client.query(`DELETE FROM ${tabla} WHERE id = $1`, [id]);
-        await client.query('COMMIT');
-        res.json({ mensaje: 'Registro eliminado y stock revertido' });
-    } catch (error) {
-        await client.query('ROLLBACK');
-        res.status(500).json({ error: 'Error al eliminar el registro' });
-    } finally {
-        client.release();
-    }
-});
-// RUTA SEGURA CON LOG DE AUDITORÍA (Solo Admin)
-app.delete('/api/admin/movimientos/:tipo/:id', verificarToken, verificarRol(['Administrador']), async (req, res) => {
-    const { tipo, id } = req.params;
-    const tabla = tipo === 'entrada' ? 'entradas' : 'salidas';
-    const usuario_id = req.user.id; // Obtenemos al admin que realiza la acción
-    
-    const client = await pool.connect();
-    try {
-        await client.query('BEGIN');
-        
-        // 1. Obtener detalles del registro antes de borrar para el LOG
-        const registro = await client.query(`SELECT * FROM ${tabla} WHERE id = $1`, [id]);
-        if (registro.rows.length === 0) throw new Error('Registro no encontrado');
-        const detalles = JSON.stringify(registro.rows[0]);
-
-        // 2. Si es salida, revertir stock
-        if (tabla === 'salidas') {
-            await client.query('UPDATE productos SET stock_actual = stock_actual + $1 WHERE id = $2', 
-                [registro.rows[0].cantidad, registro.rows[0].producto_id]);
-        }
-
-        // 3. Registrar en LOG de Auditoría
-        await client.query(
-            `INSERT INTO logs_auditoria (usuario_id, accion, tabla_afectada, registro_id, detalles) VALUES ($1, 'BORRADO', $2, $3, $4)`,
-            [usuario_id, tabla, id, detalles]
-        );
-        
-        // 4. Borrar el registro
-        await client.query(`DELETE FROM ${tabla} WHERE id = $1`, [id]);
-        
-        await client.query('COMMIT');
-        res.json({ mensaje: 'Registro eliminado y log guardado exitosamente' });
-    } catch (error) {
-        await client.query('ROLLBACK');
-        res.status(500).json({ error: error.message });
-    } finally {
-        client.release();
-    }
-});
+app.listen(PORT, () => console.log(`Servidor activo en puerto ${PORT}`));

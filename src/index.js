@@ -196,17 +196,14 @@ app.get('/api/productos', verificarToken, async (req, res) => {
     }
 });
 
-// AÑADE ESTA RUTA PUT QUE FALTABA:
-app.put('/api/productos/:id', verificarToken, verificarRol(['Administrador']), async (req, res) => {
+// ESTA ES LA RUTA QUE FALTABA PARA EL DASHBOARD
+app.get('/api/inventario-lotes', verificarToken, async (req, res) => {
     try {
-        await pool.query('UPDATE productos SET sku = $1, nombre = $2, categoria_id = $3, unidad_medida = $4 WHERE id = $5', 
-            [req.body.sku, req.body.nombre, req.body.categoria_id, req.body.unidad_medida, req.params.id]);
-        res.json({ mensaje: 'Producto actualizado correctamente' });
-    } catch (error) { 
-        if (error.code === '23505') return res.status(400).json({ error: 'Este código SKU ya está asignado a otro producto' });
-        res.status(500).json({ error: 'Error al actualizar producto' }); 
-    }
+        const query = `SELECT e.id AS lote_id, p.sku, p.nombre, p.unidad_medida, c.nombre AS categoria_nombre, c.almacen, e.stock_restante, e.costo_unitario FROM entradas e JOIN productos p ON e.producto_id = p.id LEFT JOIN categorias c ON p.categoria_id = c.id WHERE e.stock_restante > 0 ORDER BY p.nombre ASC, e.fecha ASC;`;
+        res.json((await pool.query(query)).rows);
+    } catch (error) { res.status(500).json({ error: 'Error al consultar el inventario' }); }
 });
+
 // ==========================================
 // EDICIÓN DE CATÁLOGOS (PRODUCTOS Y CATEGORÍAS)
 // ==========================================
@@ -263,6 +260,7 @@ app.post('/api/salidas', verificarToken, verificarRol(['Administrador', 'Supervi
         await client.query('COMMIT'); res.status(201).json({ mensaje: 'Salida registrada correctamente' });
     } catch (error) { await client.query('ROLLBACK'); res.status(400).json({ error: error.message }); } finally { client.release(); }
 });
+
 // ==========================================
 // ADMIN: EDICIÓN Y BORRADO (CON BLINDAJE CONTABLE)
 // ==========================================
@@ -336,6 +334,7 @@ app.delete('/api/admin/movimientos/:tipo/:id', verificarToken, verificarRol(['Ad
         await client.query('COMMIT'); res.json({ mensaje: 'Eliminado y stock devuelto/descontado' });
     } catch (error) { await client.query('ROLLBACK'); res.status(400).json({ error: error.message }); } finally { client.release(); }
 });
+
 // ==========================================
 // REPORTES HISTÓRICOS Y EXCEL CON FILTROS
 // ==========================================
@@ -415,6 +414,7 @@ app.get('/api/reporte-salidas', verificarToken, async (req, res) => {
         await workbook.xlsx.write(res); res.end();
     } catch (error) { res.status(500).json({ error: 'Error' }); }
 });
+
 app.post('/api/cargar-masiva/:tipo', verificarToken, verificarRol(['Administrador']), upload.single('file'), async (req, res) => {
     const { tipo } = req.params;
     const workbook = xlsx.readFile(req.file.path);
@@ -438,4 +438,5 @@ app.post('/api/cargar-masiva/:tipo', verificarToken, verificarRol(['Administrado
         res.json({ mensaje: `Carga masiva de ${tipo} completada` });
     } catch (e) { await client.query('ROLLBACK'); res.status(500).json({ error: e.message }); } finally { client.release(); }
 });
+
 app.listen(PORT, () => console.log(`Servidor activo en puerto ${PORT}`));

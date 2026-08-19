@@ -1,0 +1,25 @@
+<main class="p-8">
+  <h2 class="text-2xl font-bold mb-6">Carga Masiva de Datos</h2>
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <!-- Repite este bloque para Productos, Categorías e Inventario -->
+    <div class="bg-white p-6 rounded-lg border">
+      <h3 class="font-bold mb-4">Cargar Productos (Excel)</h3>
+      <input type="file" id="file-productos" accept=".xlsx" class="mb-4">
+      <button onclick="subir('productos')" class="bg-blue-600 text-white px-4 py-2 rounded">Subir Excel</button>
+    </div>
+  </div>
+</main>
+
+<script>
+async function subir(tipo) {
+    const file = document.getElementById(`file-${tipo}`).files[0];
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(`/api/cargar-masiva/${tipo}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+    });
+    alert((await res.json()).mensaje || "Error");
+}
+</script>

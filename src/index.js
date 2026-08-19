@@ -6,6 +6,10 @@ const jwt = require('jsonwebtoken');
 const ExcelJS = require('exceljs');
 const pool = require('./config/db');
 
+const multer = require('multer');
+const xlsx = require('xlsx');
+const upload = multer({ dest: 'uploads/' });
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'secreto_super_seguro';
@@ -205,7 +209,7 @@ app.post('/api/salidas', verificarToken, verificarRol(['Administrador', 'Supervi
 });
 
 // ==========================================
-// ADMIN: EDICIÓN Y BORRADO (AUDITORÍA MATEMÁTICA)
+// ADMIN: EDICIÓN Y BORRADO (CON BLINDAJE CONTABLE)
 // ==========================================
 app.put('/api/admin/movimientos/:tipo/:id', verificarToken, verificarRol(['Administrador']), async (req, res) => {
     const { tipo, id } = req.params; 
@@ -223,7 +227,17 @@ app.put('/api/admin/movimientos/:tipo/:id', verificarToken, verificarRol(['Admin
         const diferencia = nueva_cantidad - parseFloat(mov.cantidad);
 
         if (tipo === 'entrada') {
-            await client.query('UPDATE entradas SET cantidad = $1, stock_restante = stock_restante + $2 WHERE id = $3', [nueva_cantidad, diferencia, id]);
+            // BLINDAJE: ¿Cuántas unidades de este lote ya salieron?
+            const consumido = parseFloat(mov.cantidad) - parseFloat(mov.stock_restante);
+            
+            // No permitir reducir la entrada a una cantidad menor de lo que ya se gastó
+            if (nueva_cantidad < consumido) {
+                throw new Error(`BLINDAJE CONTABLE: Este lote ya tiene ${consumido.toFixed(2)} unidades consumidas en salidas. No puedes reducir su cantidad a menos de eso.`);
+            }
+            
+            await client.query('UPDATE entradas SET cantidad = $1, stock_restante = $1 - $2 WHERE id = $3', [nueva_cantidad, consumido, id]);
+            // Ajustar el stock general del producto
+            await client.query('UPDATE productos SET stock_actual = stock_actual + $1 WHERE id = $2', [diferencia, mov.producto_id]);
         } else {
             if (diferencia > 0) await descontarStock(client, mov.producto_id, diferencia);
             else if (diferencia < 0) await restaurarStock(client, mov.producto_id, Math.abs(diferencia));
@@ -245,14 +259,28 @@ app.delete('/api/admin/movimientos/:tipo/:id', verificarToken, verificarRol(['Ad
         const reg = await client.query(`SELECT * FROM ${tabla} WHERE id = $1`, [id]);
         if (reg.rows.length === 0) throw new Error('Registro no encontrado');
         
-        if (tabla === 'salidas') await restaurarStock(client, reg.rows[0].producto_id, reg.rows[0].cantidad);
-        
-        await client.query('INSERT INTO logs_auditoria (usuario_id, accion, tabla_afectada, registro_id, detalles) VALUES ($1, $2, $3, $4, $5)', [req.user.id, 'BORRADO', tabla, id, JSON.stringify({ ...reg.rows[0], motivo: motivo || 'No especificado' })]);
-        await client.query(`DELETE FROM ${tabla} WHERE id = $1`, [id]);
-        await client.query('COMMIT'); res.json({ mensaje: 'Eliminado y stock devuelto' });
-    } catch (error) { await client.query('ROLLBACK'); res.status(500).json({ error: error.message }); } finally { client.release(); }
-});
+        const mov = reg.rows[0];
 
+        if (tabla === 'entradas') {
+            // BLINDAJE: Si el stock restante es menor que la cantidad original, ya hubo salidas de este lote.
+            if (parseFloat(mov.cantidad) > parseFloat(mov.stock_restante)) {
+                throw new Error('BLINDAJE CONTABLE: Este lote ya fue utilizado en una o varias salidas. Debes ubicar y eliminar las salidas asociadas a este producto antes de poder borrar la entrada.');
+            }
+            
+            // Si está intacto (nadie lo ha consumido), lo podemos borrar, pero hay que restar ese inventario falso del producto general.
+            await client.query('UPDATE productos SET stock_actual = stock_actual - $1 WHERE id = $2', [mov.cantidad, mov.producto_id]);
+        }
+
+        if (tabla === 'salidas') {
+            await restaurarStock(client, mov.producto_id, mov.cantidad);
+        }
+        
+        await client.query('INSERT INTO logs_auditoria (usuario_id, accion, tabla_afectada, registro_id, detalles) VALUES ($1, $2, $3, $4, $5)', [req.user.id, 'BORRADO', tabla, id, JSON.stringify({ ...mov, motivo: motivo || 'No especificado' })]);
+        await client.query(`DELETE FROM ${tabla} WHERE id = $1`, [id]);
+        
+        await client.query('COMMIT'); res.json({ mensaje: 'Eliminado y stock devuelto/descontado' });
+    } catch (error) { await client.query('ROLLBACK'); res.status(400).json({ error: error.message }); } finally { client.release(); }
+});
 // ==========================================
 // REPORTES HISTÓRICOS Y EXCEL CON FILTROS
 // ==========================================

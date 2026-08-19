@@ -2,140 +2,80 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ERP - Registro de Salidas</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = { theme: { extend: { colors: { corporate: { dark: '#0f172a', primary: '#1e40af', light: '#f8fafc', border: '#e2e8f0' } } } } }
     </script>
 </head>
-<body class="bg-corporate-light font-sans text-slate-800 subpixel-antialiased">
-
-  <script>
-    const token = localStorage.getItem('erp_token') || localStorage.getItem('token');
-    if (!token) window.location.href = 'login.html';
-    function parseJwt(token) { try { return JSON.parse(atob(token.split('.')[1])); } catch (e) { return null; } }
-    const currentUser = parseJwt(token);
-  </script>
+<body class="bg-corporate-light font-sans text-slate-800">
 
   <div class="flex h-screen overflow-hidden">
-    <!-- Sidebar -->
     <aside class="w-64 bg-corporate-dark text-slate-300 flex flex-col hidden md:flex">
-      <div class="p-6 text-xl font-bold text-white tracking-wider border-b border-slate-800">
-        <span>ERP Genética</span>
-      </div>
-      <nav class="flex-1 p-4 space-y-2">
-        <a href="index.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📊 Dashboard Inventario</a>
-        <a href="entradas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📥 Registro de Compras</a>
-        <a href="salidas.html" class="block px-4 py-2.5 rounded-lg bg-corporate-primary text-white font-medium shadow-xs">📤 Registro de Salidas</a>
-        <a href="reportes.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📑 Historial y Reportes</a>
-        <a href="categorias.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🏷️ Categorías y Almacén</a>
-        <a href="usuarios.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">👥 Gestión de Usuarios</a>
-        <a href="auditoria.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🛡️ Auditoría del Sistema</a>
-        <button onclick="descargarReporteGlobal()" class="w-full text-left block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition mt-4 border-t border-slate-700 pt-4">📑 Bajar Stock Actual</button>
-      </nav>
-      <div class="p-4 border-t border-slate-800 text-xs text-slate-500">Sesión Activa • Neon DB</div>
+        <div class="p-6 text-xl font-bold text-white tracking-wider border-b border-slate-800">ERP Genética</div>
+        <nav class="flex-1 p-4 space-y-2">
+          <a href="index.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📊 Dashboard Inventario</a>
+          <a href="entradas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📥 Registro de Compras</a>
+          <a href="salidas.html" class="block px-4 py-2.5 rounded-lg bg-corporate-primary text-white font-medium shadow-xs">📤 Registro de Salidas</a>
+          <a href="reportes.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📑 Historial y Reportes</a>
+          <a href="categorias.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🏷️ Categorías y Almacén</a>
+          <a href="usuarios.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">👥 Gestión de Usuarios</a>
+          <a href="auditoria.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🛡️ Auditoría del Sistema</a>
+        </nav>
     </aside>
 
-    <!-- Main -->
-    <div class="flex-1 flex flex-col overflow-y-auto">
-      <header class="bg-white border-b h-16 flex items-center justify-between px-8 shadow-xs">
-        <h1 class="text-lg font-semibold text-slate-700">Registrar Consumo o Salida de Inventario</h1>
-        <button onclick="localStorage.clear(); window.location.href='login.html'" class="text-sm text-red-600 font-medium bg-red-50 px-3 py-1.5 rounded-lg">Cerrar Sesión</button>
-      </header>
-
-      <main class="p-8 max-w-xl">
-        <div class="bg-white rounded-xl border border-corporate-border p-6 shadow-xs">
-          <h3 class="font-bold text-slate-700 border-b pb-3 mb-5">Detalle de la Salida (FIFO Automático)</h3>
-          <form id="form-salida" class="space-y-4">
-            <div>
-              <label class="block text-sm font-medium mb-1">Seleccionar Producto</label>
-              <select id="producto_id" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary"></select>
-            </div>
-            
-            <div>
-              <label class="block text-sm font-medium mb-1">Cantidad a Salir <span class="text-slate-400 text-xs">(Ingresar en la unidad de medida del producto)</span></label>
-              <input type="number" id="cantidad" min="0.01" step="0.01" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary" placeholder="Ej: 5.5">
-            </div>
-
-            <div>
-              <label class="block text-sm font-medium mb-1">Concepto / Destino</label>
-              <input type="text" id="concepto" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary" placeholder="Ej: Consumo Larvas, Venta interna...">
-            </div>
-
-            <!-- Campo Fecha Real -->
-            <div>
-              <label class="block text-sm font-medium mb-1">Fecha de Salida Real</label>
-              <input type="date" id="fecha_real" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary text-slate-600">
-            </div>
-
-            <div id="mensaje-estado" class="hidden px-4 py-3 rounded-lg text-sm font-medium"></div>
-            <button type="submit" id="btn-submit" class="w-full bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-lg font-medium transition shadow-xs mt-2">
-              Procesar Salida
-            </button>
-          </form>
-        </div>
-      </main>
+    <div class="flex-1 flex flex-col overflow-y-auto p-8">
+      <h1 class="text-2xl font-bold mb-6">Registrar Consumo / Salida</h1>
+      <div class="bg-white p-6 rounded-xl border shadow-xs max-w-lg">
+        <form id="form-salida" class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium mb-1">Producto</label>
+            <select id="producto_id" required class="w-full px-4 py-2 border rounded-lg"></select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Cantidad (use punto . para decimales)</label>
+            <input type="number" id="cantidad" step="any" required class="w-full px-4 py-2 border rounded-lg" placeholder="Ej: 5.5">
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Concepto</label>
+            <input type="text" id="concepto" required class="w-full px-4 py-2 border rounded-lg">
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Fecha de Salida Real</label>
+            <input type="date" id="fecha_real" required class="w-full px-4 py-2 border rounded-lg">
+          </div>
+          <button type="submit" class="w-full bg-red-600 text-white py-2 rounded-lg font-bold">Procesar Salida</button>
+        </form>
+      </div>
     </div>
   </div>
 
   <script>
-    if (currentUser && currentUser.rol !== 'Administrador') {
-      document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
-    }
-
-    // Poner fecha actual por defecto en el campo de fecha real
+    const token = localStorage.getItem('token') || localStorage.getItem('erp_token');
     document.getElementById('fecha_real').valueAsDate = new Date();
-
-    async function descargarReporteGlobal() {
-        const res = await fetch('/api/reporte-salidas', { headers: { 'Authorization': `Bearer ${token}` } });
-        const blob = await res.blob();
-        const a = document.createElement('a');
-        a.href = window.URL.createObjectURL(blob); a.download = 'inventario_actual.xlsx';
-        a.click();
-    }
-
-    async function cargarProductos() {
+    
+    async function load() {
         const res = await fetch('/api/productos', { headers: { 'Authorization': `Bearer ${token}` } });
-        const productos = await res.json();
-        document.getElementById('producto_id').innerHTML = productos.map(p => 
-            `<option value="${p.id}">${p.nombre} - SKU: ${p.sku} [Medida: ${p.unidad_medida}]</option>`
-        ).join('');
+        const p = await res.json();
+        document.getElementById('producto_id').innerHTML = p.map(x => `<option value="${x.id}">${x.nombre} (${x.unidad_medida})</option>`).join('');
     }
 
-    document.getElementById('form-salida').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const btn = document.getElementById('btn-submit');
-      const mensajeDiv = document.getElementById('mensaje-estado');
-      
-      btn.disabled = true;
-      btn.innerHTML = 'Procesando Transacción...';
-
-      try {
-        const respuesta = await fetch('/api/salidas', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify({
-            producto_id: document.getElementById('producto_id').value,
-            cantidad: parseFloat(document.getElementById('cantidad').value),
-            concepto: document.getElementById('concepto').value,
-            fecha: document.getElementById('fecha_real').value // Enviamos la fecha real elegida
-          })
+    document.getElementById('form-salida').onsubmit = async (e) => {
+        e.preventDefault();
+        const res = await fetch('/api/salidas', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({
+                producto_id: document.getElementById('producto_id').value,
+                cantidad: document.getElementById('cantidad').value,
+                concepto: document.getElementById('concepto').value,
+                fecha: document.getElementById('fecha_real').value
+            })
         });
-
-        const data = await respuesta.json();
-        mensajeDiv.className = `px-4 py-3 rounded-lg text-sm font-medium block mt-4 ${respuesta.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`;
-        mensajeDiv.textContent = respuesta.ok ? '✅ Salida registrada con éxito. Inventario descontado.' : `❌ ${data.error}`;
-        
-        if (respuesta.ok) {
-            document.getElementById('form-salida').reset();
-            document.getElementById('fecha_real').valueAsDate = new Date(); // Resetear a hoy
-        }
-      } catch (err) { alert("Error de red"); }
-      finally { btn.disabled = false; btn.innerHTML = 'Procesar Salida'; }
-    });
-
-    cargarProductos();
+        if(res.ok) { alert('Procesado'); location.reload(); }
+        else alert('Error: ' + (await res.json()).error);
+    };
+    load();
   </script>
 </body>
 </html>

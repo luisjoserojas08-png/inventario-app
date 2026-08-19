@@ -16,7 +16,10 @@
     if (!token) window.location.href = 'login.html';
     function parseJwt(t) { try { return JSON.parse(atob(t.split('.')[1])); } catch (e) { return null; } }
     const currentUser = parseJwt(token);
-    if (currentUser && currentUser.rol !== 'Administrador') window.location.href = 'index.html'; // Blindaje de seguridad
+    // Actualízala así para permitir ambos roles:
+if (currentUser && currentUser.rol !== 'Master' && currentUser.rol !== 'Administrador') {
+    window.location.href = 'index.html';
+}
   </script>
 
   <div class="flex h-screen overflow-hidden">

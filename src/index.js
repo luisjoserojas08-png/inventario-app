@@ -57,8 +57,12 @@ async function descontarStock(client, producto_id, cantidad) {
     const stockTotal = lotes.rows.reduce((acc, l) => acc + parseFloat(l.stock_restante), 0);
     if (stockTotal < cantPendiente) throw new Error('Stock insuficiente para realizar esta operación.');
 
+    let primerLoteAfectado = null;
+
     for (let lote of lotes.rows) {
         if (cantPendiente <= 0) break;
+        if (!primerLoteAfectado) primerLoteAfectado = lote.id; // Capturamos el lote principal de salida
+
         let aDescontar = Math.min(parseFloat(lote.stock_restante), cantPendiente);
         
         await client.query(
@@ -67,6 +71,7 @@ async function descontarStock(client, producto_id, cantidad) {
         );
         cantPendiente -= aDescontar;
     }
+    return primerLoteAfectado;
 }
 
 async function restaurarStock(client, producto_id, cantidad) {
@@ -200,14 +205,21 @@ app.post('/api/salidas', verificarToken, verificarRol(['Administrador', 'Supervi
         const fechaTransaccion = req.body.fecha || new Date().toISOString();
         const cantidadNumerica = parseFloat(req.body.cantidad);
 
-        await descontarStock(client, req.body.producto_id, cantidadNumerica);
-        await client.query('INSERT INTO salidas (producto_id, cantidad, concepto, fecha) VALUES ($1, $2, $3, $4)', 
-            [req.body.producto_id, cantidadNumerica, req.body.concepto, fechaTransaccion]);
-        
-        await client.query('COMMIT'); res.status(201).json({ mensaje: 'Salida registrada correctamente' });
-    } catch (error) { await client.query('ROLLBACK'); res.status(400).json({ error: error.message }); } finally { client.release(); }
-});
+        // Obtenemos el lote origen gracias a FIFO
+        const loteOrigenId = await descontarStock(client, req.body.producto_id, cantidadNumerica);
 
+        await client.query('INSERT INTO salidas (producto_id, cantidad, concepto, fecha, lote_origen_id) VALUES ($1, $2, $3, $4, $5)', 
+            [req.body.producto_id, cantidadNumerica, req.body.concepto, fechaTransaccion, loteOrigenId]);
+        
+        await client.query('COMMIT'); 
+        res.status(201).json({ mensaje: 'Salida registrada correctamente' });
+    } catch (error) { 
+        await client.query('ROLLBACK'); 
+        res.status(400).json({ error: error.message }); 
+    } finally { 
+        client.release(); 
+    }
+});
 // ==========================================
 // ADMIN: EDICIÓN Y BORRADO (CON BLINDAJE CONTABLE)
 // ==========================================
@@ -302,7 +314,7 @@ app.get('/api/reporte/entradas', verificarToken, async (req, res) => {
 
 app.get('/api/reporte/salidas', verificarToken, async (req, res) => {
     const { inicio, fin } = req.query;
-    let query = `SELECT s.id, p.sku, p.nombre AS producto_nombre, p.unidad_medida, c.almacen, s.cantidad, s.concepto, s.fecha FROM salidas s JOIN productos p ON s.producto_id = p.id LEFT JOIN categorias c ON p.categoria_id = c.id`;
+    let query = `SELECT s.id, p.sku, p.nombre AS producto_nombre, p.unidad_medida, c.almacen, s.cantidad, s.concepto, s.fecha, s.lote_origen_id FROM salidas s JOIN productos p ON s.producto_id = p.id LEFT JOIN categorias c ON p.categoria_id = c.id`;
     let params = [];
     if (inicio && fin) {
         query += ` WHERE s.fecha >= $1 AND s.fecha <= $2`;
@@ -360,5 +372,27 @@ app.get('/api/reporte-salidas', verificarToken, async (req, res) => {
         await workbook.xlsx.write(res); res.end();
     } catch (error) { res.status(500).json({ error: 'Error' }); }
 });
-
+app.post('/api/cargar-masiva/:tipo', verificarToken, verificarRol(['Administrador']), upload.single('file'), async (req, res) => {
+    const { tipo } = req.params;
+    const workbook = xlsx.readFile(req.file.path);
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const data = xlsx.utils.sheet_to_json(sheet);
+    const client = await pool.connect();
+    
+    try {
+        await client.query('BEGIN');
+        for (let row of data) {
+            if (tipo === 'productos') {
+                await client.query('INSERT INTO productos (sku, nombre, categoria_id, unidad_medida) VALUES ($1, $2, $3, $4)', [row.SKU, row.NOMBRE, row.CATEGORIA_ID, row.UOM]);
+            } else if (tipo === 'categorias') {
+                await client.query('INSERT INTO categorias (nombre, almacen) VALUES ($1, $2)', [row.NOMBRE, row.ALMACEN]);
+            } else if (tipo === 'inventario') {
+                await client.query('INSERT INTO entradas (producto_id, cantidad, costo_unitario, stock_restante, fecha) VALUES ($1, $2, $3, $4, NOW())', [row.PRODUCTO_ID, row.CANTIDAD, row.COSTO, row.CANTIDAD]);
+                await client.query('UPDATE productos SET stock_actual = stock_actual + $1 WHERE id = $2', [row.CANTIDAD, row.PRODUCTO_ID]);
+            }
+        }
+        await client.query('COMMIT');
+        res.json({ mensaje: `Carga masiva de ${tipo} completada` });
+    } catch (e) { await client.query('ROLLBACK'); res.status(500).json({ error: e.message }); } finally { client.release(); }
+});
 app.listen(PORT, () => console.log(`Servidor activo en puerto ${PORT}`));

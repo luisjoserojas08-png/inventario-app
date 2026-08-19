@@ -127,17 +127,17 @@
               <td class="px-6 py-4 text-xs text-slate-500">${new Date(item.fecha).toLocaleString()}</td>
             </tr>`).join('');
         } else {
-          thead.innerHTML = `<th class="px-6 py-3">Ref ID</th><th class="px-6 py-3">Producto</th><th class="px-6 py-3">Almacén</th><th class="px-6 py-3">Cantidad</th><th class="px-6 py-3">Concepto</th><th class="px-6 py-3">Fecha</th>`;
+         thead.innerHTML = `<th class="px-6 py-3">Ref ID</th><th class="px-6 py-3">Lote Origen</th><th class="px-6 py-3">Producto</th><th class="px-6 py-3">Almacén</th><th class="px-6 py-3">Cantidad</th><th class="px-6 py-3">Concepto</th><th class="px-6 py-3">Fecha</th>`;
           tbody.innerHTML = data.map(item => `
             <tr class="hover:bg-slate-50">
               <td class="px-6 py-4 font-mono font-bold text-red-600">SAL-${String(item.id).padStart(3, '0')}</td>
+              <td class="px-6 py-4 font-mono font-bold text-blue-600">${item.lote_origen_id ? `LOT-${String(item.lote_origen_id).padStart(3, '0')}` : 'N/A'}</td>
               <td class="px-6 py-4 font-medium text-slate-800">${item.producto_nombre} <br><span class="font-normal text-xs text-slate-400">SKU: ${item.sku}</span></td>
               <td class="px-6 py-4">${item.almacen || 'Principal'}</td>
               <td class="px-6 py-4 font-bold text-red-600">-${Number(item.cantidad).toFixed(2)} ${item.unidad_medida}</td>
               <td class="px-6 py-4 text-sm">${item.concepto}</td>
               <td class="px-6 py-4 text-xs text-slate-500">${new Date(item.fecha).toLocaleString()}</td>
             </tr>`).join('');
-        }
       } catch (e) { tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-red-500">Error al cargar datos.</td></tr>`; }
     } 
 

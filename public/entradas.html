@@ -20,10 +20,11 @@
 
   <div class="flex h-screen overflow-hidden">
     <!-- Sidebar -->
-   <aside class="w-64 bg-corporate-dark text-slate-300 flex flex-col hidden md:flex">
+    <aside class="w-64 bg-corporate-dark text-slate-300 flex flex-col hidden md:flex">
       <div class="p-6 text-xl font-bold text-white tracking-wider border-b border-slate-800">ERP Genética</div>
       <nav class="flex-1 p-4 space-y-2 overflow-y-auto">
         <a href="index.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📊 Dashboard Inventario</a>
+        <a href="costeo.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">💰 Costeo de Existencias</a>
         <a href="productos.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📦 Maestro de Productos</a>
         <a href="entradas.html" class="block px-4 py-2.5 rounded-lg bg-corporate-primary text-white font-medium shadow-xs">📥 Registro de Compras</a>
         <a href="salidas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📤 Registro de Salidas</a>
@@ -43,9 +44,8 @@
         <button onclick="localStorage.clear(); window.location.href='login.html'" class="text-sm text-red-600 font-medium bg-red-50 px-3 py-1.5 rounded-lg">Cerrar Sesión</button>
       </header>
 
-      <main class="p-8 flex flex-col lg:flex-row gap-8">
-        
-        <!-- Formulario: Registrar Lote de Compra (Izquierda) -->
+      <main class="p-8 max-w-3xl">
+        <!-- Formulario: Registrar Lote de Compra (Físico) -->
         <div class="bg-white rounded-xl border border-corporate-border p-6 shadow-xs flex-1 h-fit">
           <h3 class="font-bold text-slate-700 border-b pb-3 mb-5">Ingresar Existencias al Almacén</h3>
           <form id="form-entrada" class="space-y-4">
@@ -56,12 +56,12 @@
             
             <div class="grid grid-cols-2 gap-4">
               <div>
-                <label class="block text-sm font-medium mb-1">Cantidad (2 decimales)</label>
+                <label class="block text-sm font-medium mb-1">Cantidad Física (2 decimales)</label>
                 <input type="number" id="cantidad" step="0.01" min="0.01" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary" placeholder="Ej: 10.50">
               </div>
               <div>
-                <label class="block text-sm font-medium mb-1">Costo Unitario ($)</label>
-                <input type="number" id="costo_unitario" step="0.01" min="0.01" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary" placeholder="Ej: 5.00">
+                <label class="block text-sm font-medium mb-1">Nro. Documento (Factura/Guía)</label>
+                <input type="text" id="nro_documento" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary uppercase" placeholder="Ej: FAC-00123">
               </div>
             </div>
 
@@ -71,64 +71,34 @@
             </div>
 
             <div id="msg-entrada" class="hidden px-4 py-3 rounded-lg text-sm font-medium mt-4"></div>
-            <button type="submit" id="btn-entrada" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-lg font-medium transition">Registrar Lote de Compra</button>
+            <button type="submit" id="btn-entrada" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-lg font-medium transition">Registrar Lote Físico</button>
           </form>
         </div>
-
-      
+      </main>
+    </div>
+  </div>
 
   <script>
+    // Blindaje de seguridad para la vista
     if (currentUser && currentUser.rol !== 'Administrador') {
       document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
     }
 
     document.getElementById('fecha_real').valueAsDate = new Date();
 
-    async function descargarReporteGlobal() {
-        const res = await fetch('/api/reporte-salidas', { headers: { 'Authorization': `Bearer ${token}` } });
-        const blob = await res.blob();
-        const a = document.createElement('a');
-        a.href = window.URL.createObjectURL(blob); a.download = 'inventario_actual.xlsx';
-        a.click();
-    }
-
-    async function cargarCategorias() {
-        const res = await fetch('/api/categorias', { headers: { 'Authorization': `Bearer ${token}` } });
-        const categorias = await res.json();
-        document.getElementById('categoria_id').innerHTML = categorias.map(c => 
-            `<option value="${c.id}">${c.nombre} (${c.almacen})</option>`
-        ).join('');
-    }
-
     async function cargarProductos() {
-        const res = await fetch('/api/productos', { headers: { 'Authorization': `Bearer ${token}` } });
-        const productos = await res.json();
-        document.getElementById('producto_id').innerHTML = productos.map(p => 
-            `<option value="${p.id}">${p.nombre} - SKU: ${p.sku} [Medida: ${p.unidad_medida}]</option>`
-        ).join('');
+        try {
+            const res = await fetch('/api/productos', { headers: { 'Authorization': `Bearer ${token}` } });
+            const productos = await res.json();
+            document.getElementById('producto_id').innerHTML = '<option value="">-- Seleccione un producto --</option>' + productos.map(p => 
+                `<option value="${p.id}">${p.nombre} - SKU: ${p.sku} [Medida: ${p.unidad_medida}]</option>`
+            ).join('');
+        } catch(error) {
+            console.error("Error al cargar productos", error);
+        }
     }
 
-    document.getElementById('form-producto').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const msg = document.getElementById('msg-producto');
-        try {
-            const res = await fetch('/api/productos', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({
-                    sku: document.getElementById('sku').value,
-                    nombre: document.getElementById('nombre-prod').value,
-                    unidad_medida: document.getElementById('unidad_medida').value,
-                    categoria_id: document.getElementById('categoria_id').value
-                })
-            });
-            const data = await res.json();
-            msg.className = `px-4 py-3 rounded-lg text-sm font-medium block mt-4 ${res.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`;
-            msg.textContent = res.ok ? '✅ Producto creado en catálogo.' : `❌ ${data.error}`;
-            if(res.ok) { document.getElementById('form-producto').reset(); cargarProductos(); }
-        } catch (error) { console.error(error); }
-    });
-
+    // Evento de guardado (ahora con el Nro de Documento en vez del costo)
     document.getElementById('form-entrada').addEventListener('submit', async (e) => {
         e.preventDefault();
         const msg = document.getElementById('msg-entrada');
@@ -139,13 +109,13 @@
                 body: JSON.stringify({
                     producto_id: document.getElementById('producto_id').value,
                     cantidad: parseFloat(document.getElementById('cantidad').value),
-                    costo_unitario: parseFloat(document.getElementById('costo_unitario').value),
+                    nro_documento: document.getElementById('nro_documento').value,
                     fecha: document.getElementById('fecha_real').value
                 })
             });
             const data = await res.json();
             msg.className = `px-4 py-3 rounded-lg text-sm font-medium block mt-4 ${res.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`;
-            msg.textContent = res.ok ? '✅ Lote registrado con éxito.' : `❌ ${data.error}`;
+            msg.textContent = res.ok ? '✅ Lote físico registrado con éxito.' : `❌ ${data.error}`;
             if(res.ok) {
                 document.getElementById('form-entrada').reset();
                 document.getElementById('fecha_real').valueAsDate = new Date();
@@ -153,7 +123,6 @@
         } catch (error) { console.error(error); }
     });
 
-    cargarCategorias();
     cargarProductos();
   </script>
 </body>

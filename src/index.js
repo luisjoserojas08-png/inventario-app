@@ -229,7 +229,7 @@ app.put('/api/productos/:id', verificarToken, verificarRol(['Administrador']), a
 });
 
 // ==========================================
-// ENTRADAS Y SALIDAS (FIFO CON DECIMALES Y FECHA REAL)
+// ENTRADAS (ALMACÉN - SIN COSTOS)
 // ==========================================
 app.post('/api/entradas', verificarToken, verificarRol(['Administrador', 'Supervisor']), async (req, res) => {
     const client = await pool.connect();
@@ -237,34 +237,37 @@ app.post('/api/entradas', verificarToken, verificarRol(['Administrador', 'Superv
         await client.query('BEGIN');
         const fechaTransaccion = req.body.fecha || new Date().toISOString();
         const cantidadNumerica = parseFloat(req.body.cantidad);
-        const costoNumerico = parseFloat(req.body.costo_unitario);
+        const nroDocumento = req.body.nro_documento || 'S/N';
+        const costoNumerico = 0; // El costo entra en 0, lo asigna Administración después
 
         await client.query('UPDATE productos SET stock_actual = stock_actual + $1 WHERE id = $2', [cantidadNumerica, req.body.producto_id]);
         
-        await client.query('INSERT INTO entradas (producto_id, cantidad, costo_unitario, stock_restante, fecha, usuario_id) VALUES ($1, $2, $3, $4, $5, $6)', 
-            [req.body.producto_id, cantidadNumerica, costoNumerico, cantidadNumerica, fechaTransaccion, req.user.id]);
+        await client.query('INSERT INTO entradas (producto_id, cantidad, costo_unitario, stock_restante, fecha, usuario_id, nro_documento) VALUES ($1, $2, $3, $4, $5, $6, $7)', 
+            [req.body.producto_id, cantidadNumerica, costoNumerico, cantidadNumerica, fechaTransaccion, req.user.id, nroDocumento]);
         
-        await client.query('COMMIT'); res.status(201).json({ mensaje: 'Lote registrado con éxito' });
+        await client.query('COMMIT'); res.status(201).json({ mensaje: 'Lote físico registrado con éxito' });
     } catch (error) { await client.query('ROLLBACK'); res.status(500).json({ error: error.message }); } finally { client.release(); }
 });
 
-app.post('/api/salidas', verificarToken, verificarRol(['Administrador', 'Supervisor']), async (req, res) => {
-    const client = await pool.connect();
+// ==========================================
+// MÓDULO DE COSTEO (SOLO ADMINISTRACIÓN)
+// ==========================================
+app.get('/api/costeo/lotes', verificarToken, verificarRol(['Administrador']), async (req, res) => {
     try {
-        await client.query('BEGIN');
-        const fechaTransaccion = req.body.fecha || new Date().toISOString();
-        const cantidadNumerica = parseFloat(req.body.cantidad);
-        const centroCostoId = req.body.centro_costo_id ? parseInt(req.body.centro_costo_id) : null;
-
-        const loteOrigenId = await descontarStock(client, req.body.producto_id, cantidadNumerica);
-
-        await client.query('INSERT INTO salidas (producto_id, cantidad, concepto, fecha, lote_origen_id, centro_costo_id, usuario_id) VALUES ($1, $2, $3, $4, $5, $6, $7)', 
-            [req.body.producto_id, cantidadNumerica, req.body.concepto, fechaTransaccion, loteOrigenId, centroCostoId, req.user.id]);
-        
-        await client.query('COMMIT'); res.status(201).json({ mensaje: 'Salida registrada correctamente' });
-    } catch (error) { await client.query('ROLLBACK'); res.status(400).json({ error: error.message }); } finally { client.release(); }
+        const query = `SELECT e.id, p.sku, p.nombre, p.unidad_medida, e.cantidad, e.costo_unitario, e.fecha, e.nro_documento 
+                       FROM entradas e JOIN productos p ON e.producto_id = p.id 
+                       ORDER BY e.fecha DESC`;
+        res.json((await pool.query(query)).rows);
+    } catch (error) { res.status(500).json({ error: 'Error al consultar lotes para costeo' }); }
 });
 
+app.put('/api/costeo/lotes/:id', verificarToken, verificarRol(['Administrador']), async (req, res) => {
+    try {
+        const nuevoCosto = parseFloat(req.body.costo_unitario);
+        await pool.query('UPDATE entradas SET costo_unitario = $1 WHERE id = $2', [nuevoCosto, req.params.id]);
+        res.json({ mensaje: 'Costo actualizado y valorizado correctamente' });
+    } catch (error) { res.status(500).json({ error: 'Error al actualizar costo' }); }
+});
 // ==========================================
 // ADMIN: EDICIÓN Y BORRADO (CON BLINDAJE CONTABLE)
 // ==========================================

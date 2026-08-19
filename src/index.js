@@ -119,7 +119,18 @@ app.get('/api/usuarios', verificarToken, verificarRol(['Master']), async (req, r
     try { res.json((await pool.query('SELECT id, nombre, usuario, rol FROM usuarios ORDER BY nombre ASC')).rows); } 
     catch (error) { res.status(500).json({ error: 'Error al consultar usuarios' }); }
 });
-
+app.put('/api/usuarios/:id', verificarToken, verificarRol(['Master']), async (req, res) => {
+    const { nombre, rol, password } = req.body;
+    try {
+        if (password && password.trim() !== "") {
+            const hash = await bcrypt.hash(password, 10);
+            await pool.query('UPDATE usuarios SET nombre=$1, rol=$2, password=$3 WHERE id=$4', [nombre, rol, hash, req.params.id]);
+        } else {
+            await pool.query('UPDATE usuarios SET nombre=$1, rol=$2 WHERE id=$3', [nombre, rol, req.params.id]);
+        }
+        res.json({ mensaje: 'Perfil actualizado exitosamente' });
+    } catch (error) { res.status(500).json({ error: 'Error al actualizar usuario' }); }
+});
 // ==========================================
 // ALMACENES Y CATEGORÍAS
 // ==========================================

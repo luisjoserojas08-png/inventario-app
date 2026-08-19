@@ -30,9 +30,7 @@ function verificarToken(req, res, next) {
 
 function verificarRol(rolesPermitidos) {
     return (req, res, next) => {
-        if (!req.user || !rolesPermitidos.includes(req.user.rol)) {
-            return res.status(403).json({ error: 'Acceso denegado' });
-        }
+        if (!req.user || !rolesPermitidos.includes(req.user.rol)) return res.status(403).json({ error: 'Acceso denegado' });
         next();
     };
 }
@@ -74,7 +72,7 @@ app.put('/api/usuarios/:id', verificarToken, verificarRol(['Administrador']), as
         } else {
             await pool.query(`UPDATE usuarios SET nombre = $1, correo = $2, rol = $3 WHERE id = $4`, [nombre, correo, rol, id]);
         }
-        res.json({ mensaje: 'Usuario actualizado con éxito' });
+        res.json({ mensaje: 'Usuario actualizado' });
     } catch (error) { res.status(500).json({ error: 'Error al actualizar' }); }
 });
 
@@ -85,7 +83,26 @@ app.delete('/api/usuarios/:id', verificarToken, verificarRol(['Administrador']),
     res.json({ mensaje: 'Usuario eliminado' });
 });
 
-// --- CATEGORÍAS Y ALMACENES ---
+// --- ALMACENES (NUEVO) ---
+app.post('/api/almacenes', verificarToken, verificarRol(['Administrador']), async (req, res) => {
+    const { nombre } = req.body;
+    try {
+        const resultado = await pool.query(`INSERT INTO almacenes (nombre) VALUES ($1) RETURNING *`, [nombre]);
+        res.status(201).json({ mensaje: 'Almacén registrado', almacen: resultado.rows[0] });
+    } catch (error) {
+        if (error.code === '23505') return res.status(400).json({ error: 'Ese almacén ya existe' });
+        res.status(500).json({ error: 'Error al registrar almacén' });
+    }
+});
+
+app.get('/api/almacenes', verificarToken, async (req, res) => {
+    try {
+        const resultado = await pool.query('SELECT * FROM almacenes ORDER BY nombre ASC');
+        res.json(resultado.rows);
+    } catch (error) { res.status(500).json({ error: 'Error al consultar almacenes' }); }
+});
+
+// --- CATEGORÍAS ---
 app.post('/api/categorias', verificarToken, verificarRol(['Administrador']), async (req, res) => {
     const { nombre, almacen } = req.body;
     try {
@@ -212,7 +229,7 @@ app.get('/api/reporte/entradas', verificarToken, async (req, res) => {
         `;
         const resultado = await pool.query(query);
         res.json(resultado.rows);
-    } catch (error) { res.status(500).json({ error: 'Error al consultar historial de entradas' }); }
+    } catch (error) { res.status(500).json({ error: 'Error al consultar historial' }); }
 });
 
 app.get('/api/reporte/salidas', verificarToken, async (req, res) => {
@@ -227,7 +244,7 @@ app.get('/api/reporte/salidas', verificarToken, async (req, res) => {
         `;
         const resultado = await pool.query(query);
         res.json(resultado.rows);
-    } catch (error) { res.status(500).json({ error: 'Error al consultar historial de salidas' }); }
+    } catch (error) { res.status(500).json({ error: 'Error al consultar historial' }); }
 });
 
 app.get('/api/reporte-salidas', verificarToken, async (req, res) => {

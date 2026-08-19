@@ -19,7 +19,6 @@
   </script>
 
   <div class="flex h-screen overflow-hidden">
-    <!-- Sidebar -->
     <aside class="w-64 bg-corporate-dark text-slate-300 flex flex-col hidden md:flex">
       <div class="p-6 text-xl font-bold text-white tracking-wider border-b border-slate-800">ERP Genética</div>
       <nav class="flex-1 p-4 space-y-2">
@@ -35,7 +34,6 @@
       <div class="p-4 border-t border-slate-800 text-xs text-slate-500">Sesión Activa • Neon DB</div>
     </aside>
 
-    <!-- Main -->
     <div class="flex-1 flex flex-col overflow-y-auto">
       <header class="bg-white border-b h-16 flex items-center justify-between px-8 shadow-xs">
         <h1 class="text-lg font-semibold text-slate-700">Mantenimiento de Categorías y Almacenes</h1>
@@ -44,45 +42,68 @@
 
       <main class="p-8 flex flex-col lg:flex-row gap-8">
         
-        <!-- Formulario para Nueva Categoría y Almacén -->
-        <div class="bg-white rounded-xl border border-corporate-border p-6 shadow-xs w-full lg:w-1/3 h-fit">
-          <h3 class="font-bold text-slate-700 border-b pb-3 mb-4">Nueva Categoría</h3>
-          <form id="form-cat" class="space-y-4">
-            <div>
-              <label class="block text-sm font-medium mb-1">Nombre de la Categoría</label>
-              <input type="text" id="nombre-cat" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary" placeholder="Ej: Insumos Químicos">
-            </div>
-            <div>
-              <label class="block text-sm font-medium mb-1">Almacén de Destino</label>
-              <input type="text" id="almacen-cat" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary" placeholder="Ej: Almacén Principal, Planta 2...">
-            </div>
-            <div id="msg-cat" class="hidden px-4 py-3 rounded-lg text-sm font-medium"></div>
-            <button type="submit" class="w-full bg-corporate-primary text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 transition shadow-xs">Guardar Categoría</button>
-          </form>
-        </div>
-
-        <!-- Tabla de Categorías Existentes -->
-        <div class="bg-white rounded-xl border border-corporate-border shadow-xs flex-1 overflow-hidden">
-          <div class="px-6 py-4 border-b bg-slate-50 flex justify-between items-center">
-            <h3 class="font-bold text-slate-700">Categorías Existentes</h3>
-            <button onclick="cargarCategorias()" class="text-sm text-corporate-primary font-medium hover:underline">Actualizar</button>
+        <!-- Columna Izquierda: Formularios -->
+        <div class="w-full lg:w-1/3 flex flex-col gap-6">
+            
+          <!-- Formulario: Nuevo Almacén -->
+          <div class="bg-white rounded-xl border border-corporate-border p-6 shadow-xs">
+            <h3 class="font-bold text-slate-700 border-b pb-3 mb-4">1. Crear Nuevo Almacén</h3>
+            <form id="form-alm" class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium mb-1">Nombre del Almacén</label>
+                <input type="text" id="nombre-alm" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary" placeholder="Ej: Planta 2, Cuarto Frío...">
+              </div>
+              <div id="msg-alm" class="hidden px-4 py-3 rounded-lg text-sm font-medium"></div>
+              <button type="submit" class="w-full bg-slate-800 text-white py-2.5 rounded-lg font-medium hover:bg-slate-900 transition shadow-xs">Guardar Almacén</button>
+            </form>
           </div>
-          <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse">
-              <thead>
-                <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b">
-                  <th class="px-6 py-3">ID</th>
-                  <th class="px-6 py-3">Nombre</th>
-                  <th class="px-6 py-3">Almacén Asignado</th>
-                </tr>
-              </thead>
-              <tbody id="tabla-cat" class="divide-y text-sm text-slate-600">
-                <tr><td colspan="3" class="px-6 py-6 text-center text-slate-400">Cargando categorías...</td></tr>
-              </tbody>
-            </table>
+
+          <!-- Formulario: Nueva Categoría -->
+          <div class="bg-slate-50 rounded-xl border border-corporate-border p-6 shadow-xs">
+            <h3 class="font-bold text-slate-700 border-b pb-3 mb-4">2. Nueva Categoría</h3>
+            <form id="form-cat" class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium mb-1">Nombre de la Categoría</label>
+                <input type="text" id="nombre-cat" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary" placeholder="Ej: Insumos Químicos">
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1">Seleccionar Almacén de Destino</label>
+                <select id="almacen-cat" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary bg-white">
+                    <!-- Se llena con JS -->
+                </select>
+              </div>
+              <div id="msg-cat" class="hidden px-4 py-3 rounded-lg text-sm font-medium"></div>
+              <button type="submit" class="w-full bg-corporate-primary text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 transition shadow-xs">Guardar Categoría</button>
+            </form>
           </div>
         </div>
 
+        <!-- Columna Derecha: Tablas -->
+        <div class="flex-1 flex flex-col gap-6">
+            
+          <!-- Tabla de Categorías Existentes -->
+          <div class="bg-white rounded-xl border border-corporate-border shadow-xs overflow-hidden">
+            <div class="px-6 py-4 border-b bg-slate-50 flex justify-between items-center">
+              <h3 class="font-bold text-slate-700">Categorías Asignadas</h3>
+              <button onclick="cargarTodo()" class="text-sm text-corporate-primary font-medium hover:underline">Actualizar</button>
+            </div>
+            <div class="overflow-x-auto max-h-96">
+              <table class="w-full text-left border-collapse">
+                <thead>
+                  <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b sticky top-0 shadow-sm">
+                    <th class="px-6 py-3 bg-slate-50">ID</th>
+                    <th class="px-6 py-3 bg-slate-50">Nombre Categoría</th>
+                    <th class="px-6 py-3 bg-slate-50">Ubicación / Almacén</th>
+                  </tr>
+                </thead>
+                <tbody id="tabla-cat" class="divide-y text-sm text-slate-600">
+                  <tr><td colspan="3" class="px-6 py-6 text-center text-slate-400">Cargando...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
       </main>
     </div>
   </div>
@@ -94,34 +115,58 @@
 
     async function descargarReporte() {
       const res = await fetch('/api/reporte-salidas', { headers: { 'Authorization': `Bearer ${token}` } });
-      if (!res.ok) return alert("Error al descargar excel.");
       const blob = await res.blob();
       const a = document.createElement('a');
       a.href = window.URL.createObjectURL(blob); a.download = 'reporte_inventario_general.xlsx';
       a.click();
     }
 
-    async function cargarCategorias() {
+    async function cargarTodo() {
       try {
-        const res = await fetch('/api/categorias', { headers: { 'Authorization': `Bearer ${token}` } });
-        const data = await res.json();
+        // Cargar almacenes para el select
+        const resAlm = await fetch('/api/almacenes', { headers: { 'Authorization': `Bearer ${token}` } });
+        const almacenes = await resAlm.json();
+        const selectAlm = document.getElementById('almacen-cat');
+        selectAlm.innerHTML = almacenes.map(a => `<option value="${a.nombre}">${a.nombre}</option>`).join('');
+
+        // Cargar categorías para la tabla
+        const resCat = await fetch('/api/categorias', { headers: { 'Authorization': `Bearer ${token}` } });
+        const categorias = await resCat.json();
         const tbody = document.getElementById('tabla-cat');
         
-        if (!data.length) {
+        if (!categorias.length) {
           tbody.innerHTML = `<tr><td colspan="3" class="px-6 py-6 text-center text-slate-400">No hay categorías registradas.</td></tr>`;
           return;
         }
 
-        tbody.innerHTML = data.map(c => `
+        tbody.innerHTML = categorias.map(c => `
           <tr class="hover:bg-slate-50 transition">
             <td class="px-6 py-4 font-mono font-medium text-slate-500">#${c.id}</td>
             <td class="px-6 py-4 font-bold text-slate-800">${c.nombre}</td>
             <td class="px-6 py-4"><span class="bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full text-xs font-semibold">${c.almacen || 'Almacén Principal'}</span></td>
           </tr>
         `).join('');
-      } catch (err) { console.error("Error al cargar categorías", err); }
+      } catch (err) { console.error("Error al cargar datos", err); }
     }
 
+    // Guardar Almacén
+    document.getElementById('form-alm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const msg = document.getElementById('msg-alm');
+      try {
+        const res = await fetch('/api/almacenes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ nombre: document.getElementById('nombre-alm').value })
+        });
+        const data = await res.json();
+        msg.className = `px-4 py-3 rounded-lg text-sm font-medium block mt-2 ${res.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`;
+        msg.textContent = res.ok ? '✅ Almacén creado.' : `❌ ${data.error}`;
+        if(res.ok) { document.getElementById('form-alm').reset(); cargarTodo(); }
+      } catch (error) { console.error(error); }
+    });
+
+    // Guardar Categoría
     document.getElementById('form-cat').addEventListener('submit', async (e) => {
       e.preventDefault();
       const msg = document.getElementById('msg-cat');
@@ -135,17 +180,13 @@
           })
         });
         const data = await res.json();
-        msg.className = `px-4 py-3 rounded-lg text-sm font-medium block mb-4 ${res.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`;
-        msg.textContent = res.ok ? '✅ Categoría y almacén registrados con éxito.' : `❌ ${data.error}`;
-        
-        if(res.ok) { 
-          document.getElementById('form-cat').reset(); 
-          cargarCategorias(); 
-        }
+        msg.className = `px-4 py-3 rounded-lg text-sm font-medium block mt-2 ${res.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`;
+        msg.textContent = res.ok ? '✅ Categoría registrada.' : `❌ ${data.error}`;
+        if(res.ok) { document.getElementById('form-cat').reset(); cargarTodo(); }
       } catch (error) { console.error(error); }
     });
 
-    cargarCategorias();
+    cargarTodo();
   </script>
 </body>
 </html>

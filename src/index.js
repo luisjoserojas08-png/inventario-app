@@ -186,17 +186,46 @@ app.post('/api/productos', verificarToken, verificarRol(['Administrador', 'Super
 
 app.get('/api/productos', verificarToken, async (req, res) => {
     try { 
-        // Agregamos stock_actual a la consulta
-        res.json((await pool.query('SELECT id, sku, nombre, unidad_medida, stock_actual FROM productos ORDER BY nombre ASC')).rows); 
+        const query = `SELECT p.id, p.sku, p.nombre, p.unidad_medida, p.stock_actual, p.categoria_id, c.nombre AS categoria_nombre 
+                       FROM productos p 
+                       LEFT JOIN categorias c ON p.categoria_id = c.id 
+                       ORDER BY p.nombre ASC`;
+        res.json((await pool.query(query)).rows); 
     } catch (e) { 
         res.status(500).json({ error: 'Error' }); 
     }
 });
-app.get('/api/inventario-lotes', verificarToken, async (req, res) => {
+
+// AÑADE ESTA RUTA PUT QUE FALTABA:
+app.put('/api/productos/:id', verificarToken, verificarRol(['Administrador']), async (req, res) => {
     try {
-        const query = `SELECT e.id AS lote_id, p.sku, p.nombre, p.unidad_medida, c.nombre AS categoria_nombre, c.almacen, e.stock_restante, e.costo_unitario FROM entradas e JOIN productos p ON e.producto_id = p.id LEFT JOIN categorias c ON p.categoria_id = c.id WHERE e.stock_restante > 0 ORDER BY p.nombre ASC, e.fecha ASC;`;
-        res.json((await pool.query(query)).rows);
-    } catch (error) { res.status(500).json({ error: 'Error al consultar el inventario' }); }
+        await pool.query('UPDATE productos SET sku = $1, nombre = $2, categoria_id = $3, unidad_medida = $4 WHERE id = $5', 
+            [req.body.sku, req.body.nombre, req.body.categoria_id, req.body.unidad_medida, req.params.id]);
+        res.json({ mensaje: 'Producto actualizado correctamente' });
+    } catch (error) { 
+        if (error.code === '23505') return res.status(400).json({ error: 'Este código SKU ya está asignado a otro producto' });
+        res.status(500).json({ error: 'Error al actualizar producto' }); 
+    }
+});
+// ==========================================
+// EDICIÓN DE CATÁLOGOS (PRODUCTOS Y CATEGORÍAS)
+// ==========================================
+app.put('/api/categorias/:id', verificarToken, verificarRol(['Administrador']), async (req, res) => {
+    try {
+        await pool.query('UPDATE categorias SET nombre = $1, almacen = $2 WHERE id = $3', [req.body.nombre, req.body.almacen, req.params.id]);
+        res.json({ mensaje: 'Categoría actualizada correctamente' });
+    } catch (error) { res.status(500).json({ error: 'Error al actualizar categoría' }); }
+});
+
+app.put('/api/productos/:id', verificarToken, verificarRol(['Administrador']), async (req, res) => {
+    try {
+        await pool.query('UPDATE productos SET sku = $1, nombre = $2, categoria_id = $3, unidad_medida = $4 WHERE id = $5', 
+            [req.body.sku, req.body.nombre, req.body.categoria_id, req.body.unidad_medida, req.params.id]);
+        res.json({ mensaje: 'Producto actualizado correctamente' });
+    } catch (error) { 
+        if (error.code === '23505') return res.status(400).json({ error: 'Este código SKU ya está asignado a otro producto' });
+        res.status(500).json({ error: 'Error al actualizar producto' }); 
+    }
 });
 
 // ==========================================

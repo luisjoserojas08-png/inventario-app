@@ -5,12 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ERP - Dashboard de Inventario</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = { theme: { extend: { colors: { corporate: { dark: '#0f172a', primary: '#1e40af', light: '#f8fafc', border: '#e2e8f0' } } } } }
-    </script>
+    <script>tailwind.config={theme:{extend:{colors:{corporate:{dark:'#0f172a',primary:'#1e40af',light:'#f8fafc',border:'#e2e8f0'}}}}}</script>
 </head>
 <body class="bg-corporate-light font-sans text-slate-800 subpixel-antialiased">
-
   <script>
     const token = localStorage.getItem('erp_token') || localStorage.getItem('token');
     if (!token) window.location.href = 'login.html';
@@ -19,7 +16,6 @@
   </script>
 
   <div class="flex h-screen overflow-hidden">
-    <!-- Sidebar -->
     <aside class="w-64 bg-corporate-dark text-slate-300 flex flex-col hidden md:flex">
       <div class="p-6 text-xl font-bold text-white tracking-wider border-b border-slate-800">ERP Genética</div>
       <nav class="flex-1 p-4 space-y-2">
@@ -30,76 +26,49 @@
         <a href="categorias.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🏷️ Categorías y Almacén</a>
         <a href="usuarios.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">👥 Gestión de Usuarios</a>
         <a href="auditoria.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🛡️ Auditoría del Sistema</a>
-        <button onclick="descargarReporte()" class="w-full text-left block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition mt-4 border-t border-slate-700 pt-4">📑 Descargar Reporte Excel</button>
       </nav>
-      <div class="p-4 border-t border-slate-800 text-xs text-slate-500">Sesión Activa • Neon DB</div>
     </aside>
 
-    <!-- Main -->
     <div class="flex-1 flex flex-col overflow-y-auto">
       <header class="bg-white border-b h-16 flex items-center justify-between px-8 shadow-xs">
         <h1 class="text-lg font-semibold text-slate-700">Panel General de Existencias</h1>
-        <button onclick="localStorage.clear(); window.location.href='login.html'" class="text-sm text-red-600 font-medium bg-red-50 px-3 py-1.5 rounded-lg hover:bg-red-100 transition">Cerrar Sesión</button>
+        <button onclick="localStorage.clear(); window.location.href='login.html'" class="text-sm text-red-600 font-medium bg-red-50 px-3 py-1.5 rounded-lg">Cerrar Sesión</button>
       </header>
 
       <main class="p-8">
         <div class="bg-white rounded-xl border border-corporate-border shadow-xs overflow-hidden">
           <div class="px-6 py-4 border-b border-corporate-border bg-slate-50 flex justify-between items-center">
             <h3 class="font-bold text-slate-700">Inventario Actualizado por Lotes</h3>
-            <button onclick="cargarInventario()" class="bg-corporate-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition">Actualizar Datos</button>
+            <button onclick="cargarInventario()" class="bg-corporate-primary text-white px-4 py-2 rounded-lg text-sm font-medium">Actualizar Datos</button>
           </div>
-          <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse">
-              <thead>
-                <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-corporate-border">
-                  <th class="px-6 py-3">SKU</th>
-                  <th class="px-6 py-3">Producto</th>
-                  <th class="px-6 py-3">Categoría</th>
-                  <th class="px-6 py-3">Almacén</th>
-                  <th class="px-6 py-3">Lote ID</th>
-                  <th class="px-6 py-3">Stock Restante</th>
-                  <th class="px-6 py-3">Costo Unitario ($)</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y text-sm text-slate-600" id="tabla-inventario">
-                <tr><td colspan="7" class="px-6 py-6 text-center text-slate-400">Cargando inventario...</td></tr>
-              </tbody>
-            </table>
-          </div>
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-50 text-slate-500 text-xs uppercase border-b">
+                <th class="px-6 py-3">SKU</th><th class="px-6 py-3">Producto</th><th class="px-6 py-3">Almacén</th>
+                <th class="px-6 py-3">Lote ID</th><th class="px-6 py-3">Stock Restante</th><th class="px-6 py-3">Costo Unitario ($)</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-inventario" class="divide-y text-sm text-slate-600"></tbody>
+          </table>
         </div>
       </main>
     </div>
   </div>
 
   <script>
-    if (currentUser && currentUser.rol !== 'Administrador') {
-      document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
-    }
-
-    async function descargarReporte() {
-      const res = await fetch('/api/reporte-salidas', { headers: { 'Authorization': `Bearer ${token}` } });
-      if (!res.ok) return alert("Error al descargar excel.");
-      const blob = await res.blob();
-      const a = document.createElement('a');
-      a.href = window.URL.createObjectURL(blob); a.download = 'reporte_inventario_general.xlsx';
-      a.click();
-    }
-
+    if (currentUser && currentUser.rol !== 'Administrador') document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
     async function cargarInventario() {
       const res = await fetch('/api/inventario-lotes', { headers: { 'Authorization': `Bearer ${token}` } });
       const datos = await res.json();
-      const tbody = document.getElementById('tabla-inventario');
-      tbody.innerHTML = datos.map(item => `
+      document.getElementById('tabla-inventario').innerHTML = datos.map(item => `
         <tr class="hover:bg-slate-50 transition">
           <td class="px-6 py-4 font-medium text-slate-800">${item.sku}</td>
-          <td class="px-6 py-4">${item.nombre}</td>
-          <td class="px-6 py-4 text-slate-500">${item.categoria_nombre}</td>
+          <td class="px-6 py-4">${item.nombre} <br><span class="text-xs text-slate-400">${item.categoria_nombre}</span></td>
           <td class="px-6 py-4 font-semibold text-blue-700">${item.almacen}</td>
           <td class="px-6 py-4 font-mono font-medium">LOT-${String(item.lote_id).padStart(3, '0')}</td>
-          <td class="px-6 py-4 font-bold text-emerald-600">${item.stock_restante} ${item.unidad_medida}</td>
+          <td class="px-6 py-4 font-bold text-emerald-600">${Number(item.stock_restante).toFixed(2)} ${item.unidad_medida}</td>
           <td class="px-6 py-4">$${Number(item.costo_unitario).toFixed(2)}</td>
-        </tr>
-      `).join('');
+        </tr>`).join('');
     }
     cargarInventario();
   </script>

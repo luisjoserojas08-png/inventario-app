@@ -172,16 +172,53 @@
       } catch (e) { alert('Error.'); }
     }
 
-    async function cargarGestion() {
-      const [r1, r2] = await Promise.all([ fetch('/api/reporte/entradas',{headers:{'Authorization':`Bearer ${token}`}}), fetch('/api/reporte/salidas',{headers:{'Authorization':`Bearer ${token}`}}) ]);
-      const e = await r1.json(); const s = await r2.json();
+async function cargarGestion() {
       const tbody = document.getElementById('tabla-gestion');
-      tbody.innerHTML = [
-        ...(Array.isArray(e)?e:[]).map(x => `<tr><td class="px-6 py-4 font-bold text-emerald-600">ENTRADA</td><td class="px-6 py-4">${x.producto_nombre} <br><span class="text-xs text-slate-400">${x.sku}</span></td><td class="px-6 py-4">+${x.cantidad} ${x.unidad_medida||''}</td><td class="px-6 py-4 text-right"><button onclick="abrirModalEditar('entrada',${x.id},${x.cantidad})" class="text-blue-600 mx-2 text-sm hover:underline">Editar</button><button onclick="abrirModalBorrar('entrada',${x.id})" class="text-red-600 text-sm hover:underline">Borrar</button></td></tr>`),
-        ...(Array.isArray(s)?s:[]).map(x => `<tr><td class="px-6 py-4 font-bold text-red-600">SALIDA</td><td class="px-6 py-4">${x.producto_nombre} <br><span class="text-xs text-slate-400">${x.sku}</span></td><td class="px-6 py-4">-${x.cantidad} ${x.unidad_medida||''}</td><td class="px-6 py-4 text-right"><button onclick="abrirModalEditar('salida',${x.id},${x.cantidad})" class="text-blue-600 mx-2 text-sm hover:underline">Editar</button><button onclick="abrirModalBorrar('salida',${x.id})" class="text-red-600 text-sm hover:underline">Borrar</button></td></tr>`)
-      ].join('');
-    }
+      try {
+        const [resEntradas, resSalidas] = await Promise.all([
+          fetch('/api/reporte/entradas', { headers: { 'Authorization': `Bearer ${token}` } }),
+          fetch('/api/reporte/salidas', { headers: { 'Authorization': `Bearer ${token}` } })
+        ]);
+        
+        const entradas = await resEntradas.json();
+        const salidas = await resSalidas.json();
 
+        if (entradas.error || salidas.error) return tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-6 text-center font-semibold text-red-500">Error del servidor</td></tr>`;
+
+        const filasEntradas = (Array.isArray(entradas) ? entradas : []).map(e => `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="px-6 py-4 font-semibold text-emerald-600">ENTRADA</td>
+            <td class="px-6 py-4">${e.producto_nombre} <br><span class="text-xs text-slate-400">SKU: ${e.sku}</span></td>
+            <td class="px-6 py-4">${e.almacen || 'Principal'}</td>
+            <td class="px-6 py-4 font-bold text-emerald-700">+${Number(e.cantidad).toFixed(2)} ${e.unidad_medida || ''}</td>
+            <td class="px-6 py-4 text-xs text-slate-500">Costo U: $${Number(e.costo_unitario).toFixed(2)} <br>Fecha: ${new Date(e.fecha).toLocaleString()}</td>
+            <td class="px-6 py-4 text-center">
+              <button onclick="abrirModalEditar('entrada',${e.id},${e.cantidad})" class="text-blue-600 mx-2 text-sm hover:underline">Editar</button>
+              <button onclick="abrirModalBorrar('entrada', ${e.id})" class="text-red-600 text-sm hover:underline">Borrar</button>
+            </td>
+          </tr>
+        `);
+
+        const filasSalidas = (Array.isArray(salidas) ? salidas : []).map(s => `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="px-6 py-4 font-semibold text-red-600">SALIDA</td>
+            <td class="px-6 py-4">${s.producto_nombre} <br><span class="text-xs text-slate-400">SKU: ${s.sku}</span></td>
+            <td class="px-6 py-4">${s.almacen || 'Principal'}</td>
+            <td class="px-6 py-4 font-bold text-red-700">-${Number(s.cantidad).toFixed(2)} ${s.unidad_medida || ''}</td>
+            <td class="px-6 py-4 text-xs text-slate-500">Concepto: ${s.concepto} <br>Fecha: ${new Date(s.fecha).toLocaleString()}</td>
+            <td class="px-6 py-4 text-center">
+              <button onclick="abrirModalEditar('salida',${s.id},${s.cantidad})" class="text-blue-600 mx-2 text-sm hover:underline">Editar</button>
+              <button onclick="abrirModalBorrar('salida', ${s.id})" class="text-red-600 text-sm hover:underline">Borrar</button>
+            </td>
+          </tr>
+        `);
+
+        const combinadas = [...filasEntradas, ...filasSalidas];
+        tbody.innerHTML = combinadas.length ? combinadas.join('') : `<tr><td colspan="6" class="px-6 py-6 text-center text-slate-400">No hay movimientos.</td></tr>`;
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-6 text-center text-red-500 font-semibold">Error al cargar movimientos.</td></tr>`;
+      }
+    }
     async function cargarLogs() {
       const res = await fetch('/api/reporte/logs', {headers:{'Authorization':`Bearer ${token}`}});
       const l = await res.json();

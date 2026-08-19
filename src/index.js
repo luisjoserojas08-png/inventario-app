@@ -171,17 +171,19 @@ app.get('/api/inventario-lotes', verificarToken, async (req, res) => {
 });
 
 // ==========================================
-// ENTRADAS Y SALIDAS (FIFO CON FECHA REAL)
+// ENTRADAS Y SALIDAS (FIFO CON DECIMALES Y FECHA REAL)
 // ==========================================
 app.post('/api/entradas', verificarToken, verificarRol(['Administrador', 'Supervisor']), async (req, res) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
         const fechaTransaccion = req.body.fecha || new Date().toISOString();
+        const cantidadNumerica = parseFloat(req.body.cantidad);
+        const costoNumerico = parseFloat(req.body.costo_unitario);
 
-        await client.query('UPDATE productos SET stock_actual = stock_actual + $1 WHERE id = $2', [req.body.cantidad, req.body.producto_id]);
+        await client.query('UPDATE productos SET stock_actual = stock_actual + $1 WHERE id = $2', [cantidadNumerica, req.body.producto_id]);
         await client.query('INSERT INTO entradas (producto_id, cantidad, costo_unitario, stock_restante, fecha) VALUES ($1, $2, $3, $4, $5)', 
-            [req.body.producto_id, req.body.cantidad, req.body.costo_unitario, req.body.cantidad, fechaTransaccion]);
+            [req.body.producto_id, cantidadNumerica, costoNumerico, cantidadNumerica, fechaTransaccion]);
         
         await client.query('COMMIT'); res.status(201).json({ mensaje: 'Lote registrado con éxito' });
     } catch (error) { await client.query('ROLLBACK'); res.status(500).json({ error: error.message }); } finally { client.release(); }
@@ -192,10 +194,11 @@ app.post('/api/salidas', verificarToken, verificarRol(['Administrador', 'Supervi
     try {
         await client.query('BEGIN');
         const fechaTransaccion = req.body.fecha || new Date().toISOString();
+        const cantidadNumerica = parseFloat(req.body.cantidad);
 
-        await descontarStock(client, req.body.producto_id, req.body.cantidad);
+        await descontarStock(client, req.body.producto_id, cantidadNumerica);
         await client.query('INSERT INTO salidas (producto_id, cantidad, concepto, fecha) VALUES ($1, $2, $3, $4)', 
-            [req.body.producto_id, req.body.cantidad, req.body.concepto, fechaTransaccion]);
+            [req.body.producto_id, cantidadNumerica, req.body.concepto, fechaTransaccion]);
         
         await client.query('COMMIT'); res.status(201).json({ mensaje: 'Salida registrada correctamente' });
     } catch (error) { await client.query('ROLLBACK'); res.status(400).json({ error: error.message }); } finally { client.release(); }
@@ -205,7 +208,9 @@ app.post('/api/salidas', verificarToken, verificarRol(['Administrador', 'Supervi
 // ADMIN: EDICIÓN Y BORRADO (AUDITORÍA MATEMÁTICA)
 // ==========================================
 app.put('/api/admin/movimientos/:tipo/:id', verificarToken, verificarRol(['Administrador']), async (req, res) => {
-    const { tipo, id } = req.params; const { nueva_cantidad, motivo } = req.body;
+    const { tipo, id } = req.params; 
+    const nueva_cantidad = parseFloat(req.body.nueva_cantidad);
+    const { motivo } = req.body;
     const tabla = tipo === 'entrada' ? 'entradas' : 'salidas';
     const client = await pool.connect();
     
@@ -214,7 +219,8 @@ app.put('/api/admin/movimientos/:tipo/:id', verificarToken, verificarRol(['Admin
         const reg = await client.query(`SELECT * FROM ${tabla} WHERE id = $1`, [id]);
         if (reg.rows.length === 0) throw new Error('Registro no encontrado');
         
-        const mov = reg.rows[0]; const diferencia = parseFloat(nueva_cantidad) - parseFloat(mov.cantidad);
+        const mov = reg.rows[0]; 
+        const diferencia = nueva_cantidad - parseFloat(mov.cantidad);
 
         if (tipo === 'entrada') {
             await client.query('UPDATE entradas SET cantidad = $1, stock_restante = stock_restante + $2 WHERE id = $3', [nueva_cantidad, diferencia, id]);

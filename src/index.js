@@ -322,88 +322,61 @@ app.delete('/api/admin/movimientos/:tipo/:id', verificarToken, verificarRol(['Ma
 // ==========================================
 // REPORTES HISTÓRICOS Y EXCEL CON FILTROS (LECTURA PARA TODOS)
 // ==========================================
-app.get('/api/reporte/logs', verificarToken, async (req, res) => {
-    try { res.json((await pool.query('SELECT l.*, u.nombre AS usuario_nombre FROM logs_auditoria l JOIN usuarios u ON l.usuario_id = u.id ORDER BY l.fecha DESC LIMIT 100')).rows); } catch (error) { res.status(500).json({ error: 'Error' }); }
-});
-
-app.get('/api/reporte/entradas', verificarToken, async (req, res) => {
-    const { inicio, fin } = req.query; let query = `SELECT e.id, p.sku, p.nombre AS producto_nombre, p.unidad_medida, c.almacen, e.cantidad, e.costo_unitario, e.stock_restante, e.fecha FROM entradas e JOIN productos p ON e.producto_id = p.id LEFT JOIN categorias c ON p.categoria_id = c.id`;
-    let params = [];
-    if (inicio && fin) { query += ` WHERE e.fecha >= $1 AND e.fecha <= $2`; params.push(new Date(inicio), new Date(`${fin}T23:59:59.999Z`)); }
-    query += ` ORDER BY e.fecha DESC;`;
-    try { res.json((await pool.query(query, params)).rows); } catch (error) { res.status(500).json({ error: 'Error' }); }
-});
-
-app.get('/api/reporte/salidas', verificarToken, async (req, res) => {
-    const { inicio, fin } = req.query; let query = `SELECT s.id, p.sku, p.nombre AS producto_nombre, p.unidad_medida, c.almacen, s.cantidad, s.concepto, s.fecha, s.lote_origen_id FROM salidas s JOIN productos p ON s.producto_id = p.id LEFT JOIN categorias c ON p.categoria_id = c.id`;
-    let params = [];
-    if (inicio && fin) { query += ` WHERE s.fecha >= $1 AND s.fecha <= $2`; params.push(new Date(inicio), new Date(`${fin}T23:59:59.999Z`)); }
-    query += ` ORDER BY s.fecha DESC;`;
-    try { res.json((await pool.query(query, params)).rows); } catch (error) { res.status(500).json({ error: 'Error' }); }
-});
-
-// EXCEL (SE MANTIENE IGUAL TU EXCEL CORPORATIVO)
 app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => {
     const { tipo, inicio, fin } = req.query;
     try {
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet(`Reporte de ${tipo.toUpperCase()}`);
-        let query = ''; let params = [];
-        const fechaInicio = inicio ? new Date(inicio) : new Date('2000-01-01');
-        const fechaFin = fin ? new Date(`${fin}T23:59:59.999Z`) : new Date();
+        let query = ''; const fechaInicio = inicio ? new Date(inicio) : new Date('2000-01-01'); const fechaFin = fin ? new Date(`${fin}T23:59:59.999Z`) : new Date();
 
         if (tipo === 'entradas') {
-            worksheet.columns = [
-                { header: 'Lote ID', key: 'id_lote', width: 12 }, { header: 'SKU', key: 'sku', width: 15 }, 
-                { header: 'Producto', key: 'producto_nombre', width: 35 }, { header: 'Categoría', key: 'categoria_nombre', width: 20 },
-                { header: 'Almacén', key: 'almacen', width: 25 }, { header: 'Cant. Ingresada', key: 'cantidad', width: 18 }, 
-                { header: 'UoM', key: 'unidad_medida', width: 10 }, { header: 'Costo Unitario ($)', key: 'costo_unitario', width: 20 }, 
-                { header: 'Stock Restante', key: 'stock_restante', width: 18 }, { header: 'Fecha Real Ingreso', key: 'fecha', width: 25 },
-                { header: 'Registrado Por', key: 'usuario_nombre', width: 25 }
+            worksheet.columns = [ 
+                { header: 'Lote', key: 'id_lote', width: 12 }, { header: 'SKU', key: 'sku', width: 15 }, 
+                { header: 'Producto', key: 'producto_nombre', width: 30 }, { header: 'Cant.', key: 'cantidad', width: 15 }, 
+                { header: 'Costo Unit.', key: 'costo_unitario', width: 15 }, { header: 'Costo Total ($)', key: 'costo_total', width: 18 },
+                { header: 'Doc.', key: 'nro_documento', width: 15 }, { header: 'Usuario', key: 'usuario_nombre', width: 20 }, { header: 'Fecha', key: 'fecha', width: 20 } 
             ];
-            query = `SELECT e.id, p.sku, p.nombre AS producto_nombre, c.nombre AS categoria_nombre, c.almacen, e.cantidad, p.unidad_medida, e.costo_unitario, e.stock_restante, e.fecha, u.nombre AS usuario_nombre FROM entradas e JOIN productos p ON e.producto_id = p.id LEFT JOIN categorias c ON p.categoria_id = c.id LEFT JOIN usuarios u ON e.usuario_id = u.id WHERE e.fecha >= $1 AND e.fecha <= $2 ORDER BY e.fecha DESC`;
+            query = `SELECT e.id, p.sku, p.nombre AS producto_nombre, e.cantidad, e.costo_unitario, e.nro_documento, e.fecha, u.nombre AS usuario_nombre 
+                     FROM entradas e JOIN productos p ON e.producto_id = p.id LEFT JOIN usuarios u ON e.usuario_id = u.id 
+                     WHERE e.fecha >= $1 AND e.fecha <= $2 ORDER BY e.fecha DESC`;
         } else {
-            worksheet.columns = [
-                { header: 'Salida ID', key: 'id_lote', width: 12 }, { header: 'Lote Origen', key: 'lote_origen', width: 15 },
-                { header: 'SKU', key: 'sku', width: 15 }, { header: 'Producto', key: 'producto_nombre', width: 35 }, 
-                { header: 'Categoría', key: 'categoria_nombre', width: 20 }, { header: 'Almacén', key: 'almacen', width: 25 }, 
-                { header: 'Cant. Consumida', key: 'cantidad', width: 18 }, { header: 'UoM', key: 'unidad_medida', width: 10 },
-                { header: 'Concepto / Destino', key: 'concepto', width: 35 }, { header: 'Cod. CC', key: 'cc_codigo', width: 10 },
-                { header: 'Centro de Costo', key: 'cc_nombre', width: 25 }, { header: 'Fecha de Salida', key: 'fecha', width: 25 },
-                { header: 'Registrado Por', key: 'usuario_nombre', width: 25 }
+            worksheet.columns = [ 
+                { header: 'Salida', key: 'id_lote', width: 12 }, { header: 'SKU', key: 'sku', width: 15 }, 
+                { header: 'Producto', key: 'producto_nombre', width: 30 }, { header: 'Cant.', key: 'cantidad', width: 15 }, 
+                { header: 'Costo Unit.', key: 'costo_unitario', width: 15 }, { header: 'Costo Total ($)', key: 'costo_total', width: 18 },
+                { header: 'Concepto', key: 'concepto', width: 30 }, { header: 'Usuario', key: 'usuario_nombre', width: 20 }, { header: 'Fecha', key: 'fecha', width: 20 } 
             ];
-            query = `SELECT s.id, s.lote_origen_id, p.sku, p.nombre AS producto_nombre, c.nombre AS categoria_nombre, c.almacen, s.cantidad, p.unidad_medida, s.concepto, cc.codigo AS cc_codigo, cc.nombre AS cc_nombre, s.fecha, u.nombre AS usuario_nombre FROM salidas s JOIN productos p ON s.producto_id = p.id LEFT JOIN categorias c ON p.categoria_id = c.id LEFT JOIN centros_costo cc ON s.centro_costo_id = cc.id LEFT JOIN usuarios u ON s.usuario_id = u.id WHERE s.fecha >= $1 AND s.fecha <= $2 ORDER BY s.fecha DESC`;
+            // JOIN con entradas para traer el costo del lote de origen
+            query = `SELECT s.id, p.sku, p.nombre AS producto_nombre, s.cantidad, s.concepto, s.fecha, u.nombre AS usuario_nombre, e.costo_unitario 
+                     FROM salidas s JOIN productos p ON s.producto_id = p.id 
+                     LEFT JOIN entradas e ON s.lote_origen_id = e.id 
+                     LEFT JOIN usuarios u ON s.usuario_id = u.id 
+                     WHERE s.fecha >= $1 AND s.fecha <= $2 ORDER BY s.fecha DESC`;
         }
         
         const resultado = await pool.query(query, [fechaInicio, fechaFin]);
+        
         resultado.rows.forEach(r => {
-            worksheet.addRow({ ...r, id_lote: tipo === 'entradas' ? `LOT-${String(r.id).padStart(3, '0')}` : `SAL-${String(r.id).padStart(3, '0')}`, lote_origen: r.lote_origen_id ? `LOT-${String(r.lote_origen_id).padStart(3, '0')}` : 'N/A', categoria_nombre: r.categoria_nombre || 'Sin Categoría', cc_codigo: r.cc_codigo || 'N/A', cc_nombre: r.cc_nombre || 'Sin Centro', usuario_nombre: r.usuario_nombre || 'Sistema', fecha: new Date(r.fecha).toLocaleString('es-VE', { timeZone: 'America/Caracas' }) });
+            const cantidad = parseFloat(r.cantidad);
+            const costoUnit = parseFloat(r.costo_unitario) || 0;
+            const costoTotal = (cantidad * costoUnit).toFixed(2);
+            
+            worksheet.addRow({ 
+                ...r, 
+                id_lote: tipo === 'entradas' ? `LOT-${String(r.id).padStart(3, '0')}` : `SAL-${String(r.id).padStart(3, '0')}`,
+                costo_total: costoTotal,
+                usuario_nombre: r.usuario_nombre || 'Sistema', 
+                fecha: new Date(r.fecha).toLocaleString('es-VE') 
+            });
         });
-
-        worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
-        worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } }; 
-        worksheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
-        worksheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: worksheet.columns.length } };
-
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); 
-        res.setHeader('Content-Disposition', `attachment; filename="Historial_${tipo}_${inicio||'General'}.xlsx"`);
+        
+        worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } };
+        
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         await workbook.xlsx.write(res); res.end();
-    } catch (error) { res.status(500).json({ error: 'Error' }); }
+    } catch (error) { res.status(500).json({ error: 'Error al generar Excel: ' + error.message }); }
 });
-
-app.get('/api/reporte-salidas', verificarToken, async (req, res) => {
-    try {
-        const workbook = new ExcelJS.Workbook(); const worksheet = workbook.addWorksheet('Stock General');
-        worksheet.columns = [ { header: 'Lote ID', key: 'lote_id', width: 12 }, { header: 'SKU', key: 'sku', width: 15 }, { header: 'Producto', key: 'nombre', width: 35 }, { header: 'Categoría', key: 'categoria_nombre', width: 20 }, { header: 'Almacén', key: 'almacen', width: 25 }, { header: 'Stock Restante', key: 'stock_restante', width: 18 }, { header: 'UoM', key: 'unidad_medida', width: 10 }, { header: 'Costo Unitario ($)', key: 'costo_unitario', width: 18 }, { header: 'Valorización Total ($)', key: 'valor_total', width: 20 }, { header: 'Fecha de Ingreso', key: 'fecha', width: 25 } ];
-        const query = `SELECT e.id, p.sku, p.nombre, p.unidad_medida, c.nombre AS categoria_nombre, c.almacen, e.stock_restante, e.costo_unitario, e.fecha FROM entradas e JOIN productos p ON e.producto_id = p.id LEFT JOIN categorias c ON p.categoria_id = c.id WHERE e.stock_restante > 0 ORDER BY c.almacen, p.nombre`;
-        const resultado = await pool.query(query);
-        resultado.rows.forEach(r => { worksheet.addRow({ ...r, lote_id: `LOT-${String(r.id).padStart(3, '0')}`, categoria_nombre: r.categoria_nombre || 'Sin Categoría', valor_total: (parseFloat(r.stock_restante) * parseFloat(r.costo_unitario)).toFixed(2), fecha: new Date(r.fecha).toLocaleString('es-VE', { timeZone: 'America/Caracas' }) }); });
-        worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 }; worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } }; worksheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' }; worksheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: worksheet.columns.length } };
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); res.setHeader('Content-Disposition', 'attachment; filename="Inventario_Actual_Genetica.xlsx"');
-        await workbook.xlsx.write(res); res.end();
-    } catch (error) { res.status(500).json({ error: 'Error' }); }
-});
-
 // ==========================================
 // CARGA MASIVA EXCEL
 // ==========================================

@@ -237,8 +237,10 @@ app.post('/api/entradas', verificarToken, verificarRol(['Administrador', 'Superv
         const costoNumerico = parseFloat(req.body.costo_unitario);
 
         await client.query('UPDATE productos SET stock_actual = stock_actual + $1 WHERE id = $2', [cantidadNumerica, req.body.producto_id]);
-        await client.query('INSERT INTO entradas (producto_id, cantidad, costo_unitario, stock_restante, fecha) VALUES ($1, $2, $3, $4, $5)', 
-            [req.body.producto_id, cantidadNumerica, costoNumerico, cantidadNumerica, fechaTransaccion]);
+        
+        // AQUI AÑADIMOS EL USUARIO (req.user.id)
+        await client.query('INSERT INTO entradas (producto_id, cantidad, costo_unitario, stock_restante, fecha, usuario_id) VALUES ($1, $2, $3, $4, $5, $6)', 
+            [req.body.producto_id, cantidadNumerica, costoNumerico, cantidadNumerica, fechaTransaccion, req.user.id]);
         
         await client.query('COMMIT'); res.status(201).json({ mensaje: 'Lote registrado con éxito' });
     } catch (error) { await client.query('ROLLBACK'); res.status(500).json({ error: error.message }); } finally { client.release(); }
@@ -254,8 +256,9 @@ app.post('/api/salidas', verificarToken, verificarRol(['Administrador', 'Supervi
 
         const loteOrigenId = await descontarStock(client, req.body.producto_id, cantidadNumerica);
 
-        await client.query('INSERT INTO salidas (producto_id, cantidad, concepto, fecha, lote_origen_id, centro_costo_id) VALUES ($1, $2, $3, $4, $5, $6)', 
-            [req.body.producto_id, cantidadNumerica, req.body.concepto, fechaTransaccion, loteOrigenId, centroCostoId]);
+        // AQUI AÑADIMOS EL USUARIO (req.user.id)
+        await client.query('INSERT INTO salidas (producto_id, cantidad, concepto, fecha, lote_origen_id, centro_costo_id, usuario_id) VALUES ($1, $2, $3, $4, $5, $6, $7)', 
+            [req.body.producto_id, cantidadNumerica, req.body.concepto, fechaTransaccion, loteOrigenId, centroCostoId, req.user.id]);
         
         await client.query('COMMIT'); res.status(201).json({ mensaje: 'Salida registrada correctamente' });
     } catch (error) { await client.query('ROLLBACK'); res.status(400).json({ error: error.message }); } finally { client.release(); }
@@ -336,41 +339,12 @@ app.delete('/api/admin/movimientos/:tipo/:id', verificarToken, verificarRol(['Ad
 });
 
 // ==========================================
-// REPORTES HISTÓRICOS Y EXCEL CON FILTROS
-// ==========================================
-app.get('/api/reporte/logs', verificarToken, verificarRol(['Administrador']), async (req, res) => {
-    try { res.json((await pool.query('SELECT l.*, u.nombre AS usuario_nombre FROM logs_auditoria l JOIN usuarios u ON l.usuario_id = u.id ORDER BY l.fecha DESC LIMIT 100')).rows); } catch (error) { res.status(500).json({ error: 'Error' }); }
-});
-
-app.get('/api/reporte/entradas', verificarToken, async (req, res) => {
-    const { inicio, fin } = req.query;
-    let query = `SELECT e.id, p.sku, p.nombre AS producto_nombre, p.unidad_medida, c.almacen, e.cantidad, e.costo_unitario, e.stock_restante, e.fecha FROM entradas e JOIN productos p ON e.producto_id = p.id LEFT JOIN categorias c ON p.categoria_id = c.id`;
-    let params = [];
-    if (inicio && fin) {
-        query += ` WHERE e.fecha >= $1 AND e.fecha <= $2`;
-        params.push(new Date(inicio), new Date(`${fin}T23:59:59.999Z`));
-    }
-    query += ` ORDER BY e.fecha DESC;`;
-    try { res.json((await pool.query(query, params)).rows); } catch (error) { res.status(500).json({ error: 'Error al consultar' }); }
-});
-
-app.get('/api/reporte/salidas', verificarToken, async (req, res) => {
-    const { inicio, fin } = req.query;
-    let query = `SELECT s.id, p.sku, p.nombre AS producto_nombre, p.unidad_medida, c.almacen, s.cantidad, s.concepto, s.fecha, s.lote_origen_id FROM salidas s JOIN productos p ON s.producto_id = p.id LEFT JOIN categorias c ON p.categoria_id = c.id`;
-    let params = [];
-    if (inicio && fin) {
-        query += ` WHERE s.fecha >= $1 AND s.fecha <= $2`;
-        params.push(new Date(inicio), new Date(`${fin}T23:59:59.999Z`));
-    }
-    query += ` ORDER BY s.fecha DESC;`;
-    try { res.json((await pool.query(query, params)).rows); } catch (error) { res.status(500).json({ error: 'Error al consultar' }); }
-});
-
+// DESCARGA DE HISTORIALES (ENTRADAS Y SALIDAS) CON ESTILO CORPORATIVO
 app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => {
     const { tipo, inicio, fin } = req.query;
     try {
         const workbook = new ExcelJS.Workbook();
-        const worksheet = workbook.addWorksheet(`Historial de ${tipo}`);
+        const worksheet = workbook.addWorksheet(`Reporte de ${tipo.toUpperCase()}`);
         let query = ''; let params = [];
         
         const fechaInicio = inicio ? new Date(inicio) : new Date('2000-01-01');
@@ -378,65 +352,54 @@ app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => 
 
         if (tipo === 'entradas') {
             worksheet.columns = [
-                { header: 'Lote ID', key: 'id_lote', width: 15 }, { header: 'SKU', key: 'sku', width: 15 }, { header: 'Producto', key: 'producto_nombre', width: 30 },
-                { header: 'Almacén', key: 'almacen', width: 25 }, { header: 'Cantidad', key: 'cantidad', width: 15 }, { header: 'UoM', key: 'unidad_medida', width: 10 },
-                { header: 'Costo Unitario ($)', key: 'costo_unitario', width: 18 }, { header: 'Fecha', key: 'fecha', width: 20 }
+                { header: 'Lote ID', key: 'id_lote', width: 12 }, { header: 'SKU', key: 'sku', width: 15 }, 
+                { header: 'Producto', key: 'producto_nombre', width: 35 }, { header: 'Categoría', key: 'categoria_nombre', width: 20 },
+                { header: 'Almacén', key: 'almacen', width: 25 }, { header: 'Cant. Ingresada', key: 'cantidad', width: 18 }, 
+                { header: 'UoM', key: 'unidad_medida', width: 10 }, { header: 'Costo Unitario ($)', key: 'costo_unitario', width: 20 }, 
+                { header: 'Stock Restante', key: 'stock_restante', width: 18 }, { header: 'Fecha Real Ingreso', key: 'fecha', width: 25 },
+                { header: 'Registrado Por', key: 'usuario_nombre', width: 25 }
             ];
-            query = `SELECT e.id, p.sku, p.nombre AS producto_nombre, p.unidad_medida, c.almacen, e.cantidad, e.costo_unitario, e.fecha FROM entradas e JOIN productos p ON e.producto_id = p.id LEFT JOIN categorias c ON p.categoria_id = c.id WHERE e.fecha >= $1 AND e.fecha <= $2 ORDER BY e.fecha DESC`;
+            query = `SELECT e.id, p.sku, p.nombre AS producto_nombre, c.nombre AS categoria_nombre, c.almacen, e.cantidad, p.unidad_medida, e.costo_unitario, e.stock_restante, e.fecha, u.nombre AS usuario_nombre 
+                     FROM entradas e JOIN productos p ON e.producto_id = p.id LEFT JOIN categorias c ON p.categoria_id = c.id LEFT JOIN usuarios u ON e.usuario_id = u.id
+                     WHERE e.fecha >= $1 AND e.fecha <= $2 ORDER BY e.fecha DESC`;
         } else {
             worksheet.columns = [
-                { header: 'Salida ID', key: 'id_lote', width: 15 }, { header: 'SKU', key: 'sku', width: 15 }, { header: 'Producto', key: 'producto_nombre', width: 30 },
-                { header: 'Almacén', key: 'almacen', width: 25 }, { header: 'Cantidad', key: 'cantidad', width: 15 }, { header: 'UoM', key: 'unidad_medida', width: 10 },
-                { header: 'Concepto / Destino', key: 'concepto', width: 30 }, { header: 'Fecha', key: 'fecha', width: 20 }
+                { header: 'Salida ID', key: 'id_lote', width: 12 }, { header: 'Lote Origen', key: 'lote_origen', width: 15 },
+                { header: 'SKU', key: 'sku', width: 15 }, { header: 'Producto', key: 'producto_nombre', width: 35 }, 
+                { header: 'Categoría', key: 'categoria_nombre', width: 20 }, { header: 'Almacén', key: 'almacen', width: 25 }, 
+                { header: 'Cant. Consumida', key: 'cantidad', width: 18 }, { header: 'UoM', key: 'unidad_medida', width: 10 },
+                { header: 'Concepto / Destino', key: 'concepto', width: 35 }, { header: 'Cod. CC', key: 'cc_codigo', width: 10 },
+                { header: 'Centro de Costo', key: 'cc_nombre', width: 25 }, { header: 'Fecha de Salida', key: 'fecha', width: 25 },
+                { header: 'Registrado Por', key: 'usuario_nombre', width: 25 }
             ];
-            query = `SELECT s.id, p.sku, p.nombre AS producto_nombre, p.unidad_medida, c.almacen, s.cantidad, s.concepto, s.fecha FROM salidas s JOIN productos p ON s.producto_id = p.id LEFT JOIN categorias c ON p.categoria_id = c.id WHERE s.fecha >= $1 AND s.fecha <= $2 ORDER BY s.fecha DESC`;
+            query = `SELECT s.id, s.lote_origen_id, p.sku, p.nombre AS producto_nombre, c.nombre AS categoria_nombre, c.almacen, s.cantidad, p.unidad_medida, s.concepto, cc.codigo AS cc_codigo, cc.nombre AS cc_nombre, s.fecha, u.nombre AS usuario_nombre 
+                     FROM salidas s JOIN productos p ON s.producto_id = p.id LEFT JOIN categorias c ON p.categoria_id = c.id LEFT JOIN centros_costo cc ON s.centro_costo_id = cc.id LEFT JOIN usuarios u ON s.usuario_id = u.id
+                     WHERE s.fecha >= $1 AND s.fecha <= $2 ORDER BY s.fecha DESC`;
         }
         
         const resultado = await pool.query(query, [fechaInicio, fechaFin]);
-        const rows = resultado.rows.map(r => ({
-            ...r, id_lote: tipo === 'entradas' ? `LOT-${String(r.id).padStart(3, '0')}` : `SAL-${String(r.id).padStart(3, '0')}`,
-            fecha: new Date(r.fecha).toLocaleString()
-        }));
+        
+        resultado.rows.forEach(r => {
+            worksheet.addRow({
+                ...r,
+                id_lote: tipo === 'entradas' ? `LOT-${String(r.id).padStart(3, '0')}` : `SAL-${String(r.id).padStart(3, '0')}`,
+                lote_origen: r.lote_origen_id ? `LOT-${String(r.lote_origen_id).padStart(3, '0')}` : 'N/A',
+                categoria_nombre: r.categoria_nombre || 'Sin Categoría',
+                cc_codigo: r.cc_codigo || 'N/A',
+                cc_nombre: r.cc_nombre || 'Sin Centro',
+                usuario_nombre: r.usuario_nombre || 'Sistema / Previo', // Mostrará Sistema si fue creado antes de este ajuste
+                fecha: new Date(r.fecha).toLocaleString('es-VE', { timeZone: 'America/Caracas' }) 
+            });
+        });
 
-        worksheet.addRows(rows);
+        // DISEÑO CORPORATIVO Y FILTROS AUTOMÁTICOS
+        worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+        worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } }; 
+        worksheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
+        worksheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: worksheet.columns.length } };
+
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); 
-        res.setHeader('Content-Disposition', `attachment; filename="historial_${tipo}_${inicio||'todo'}.xlsx"`);
+        res.setHeader('Content-Disposition', `attachment; filename="Historial_${tipo}_${inicio||'General'}.xlsx"`);
         await workbook.xlsx.write(res); res.end();
     } catch (error) { res.status(500).json({ error: 'Error al generar excel' }); }
 });
-
-app.get('/api/reporte-salidas', verificarToken, async (req, res) => {
-    try {
-        const workbook = new ExcelJS.Workbook(); const worksheet = workbook.addWorksheet('Inventario General');
-        worksheet.columns = [{ header: 'SKU', key: 'sku', width: 15 }, { header: 'Producto', key: 'nombre', width: 30 }, { header: 'Categoría', key: 'categoria_nombre', width: 20 }, { header: 'Almacén', key: 'almacen', width: 25 }, { header: 'Lote ID', key: 'lote_id', width: 15 }, { header: 'Stock Restante', key: 'stock_restante', width: 15 }, { header: 'UoM', key: 'unidad_medida', width: 10 }, { header: 'Costo', key: 'costo_unitario', width: 15 }];
-        worksheet.addRows((await pool.query(`SELECT p.sku, p.nombre, p.unidad_medida, c.nombre AS categoria_nombre, c.almacen, e.id AS lote_id, e.stock_restante, e.costo_unitario FROM entradas e JOIN productos p ON e.producto_id = p.id LEFT JOIN categorias c ON p.categoria_id = c.id WHERE e.stock_restante > 0 ORDER BY c.almacen, p.nombre`)).rows);
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); res.setHeader('Content-Disposition', 'attachment; filename="inventario.xlsx"');
-        await workbook.xlsx.write(res); res.end();
-    } catch (error) { res.status(500).json({ error: 'Error' }); }
-});
-
-app.post('/api/cargar-masiva/:tipo', verificarToken, verificarRol(['Administrador']), upload.single('file'), async (req, res) => {
-    const { tipo } = req.params;
-    const workbook = xlsx.readFile(req.file.path);
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const data = xlsx.utils.sheet_to_json(sheet);
-    const client = await pool.connect();
-    
-    try {
-        await client.query('BEGIN');
-        for (let row of data) {
-            if (tipo === 'productos') {
-                await client.query('INSERT INTO productos (sku, nombre, categoria_id, unidad_medida) VALUES ($1, $2, $3, $4)', [row.SKU, row.NOMBRE, row.CATEGORIA_ID, row.UOM]);
-            } else if (tipo === 'categorias') {
-                await client.query('INSERT INTO categorias (nombre, almacen) VALUES ($1, $2)', [row.NOMBRE, row.ALMACEN]);
-            } else if (tipo === 'inventario') {
-                await client.query('INSERT INTO entradas (producto_id, cantidad, costo_unitario, stock_restante, fecha) VALUES ($1, $2, $3, $4, NOW())', [row.PRODUCTO_ID, row.CANTIDAD, row.COSTO, row.CANTIDAD]);
-                await client.query('UPDATE productos SET stock_actual = stock_actual + $1 WHERE id = $2', [row.CANTIDAD, row.PRODUCTO_ID]);
-            }
-        }
-        await client.query('COMMIT');
-        res.json({ mensaje: `Carga masiva de ${tipo} completada` });
-    } catch (e) { await client.query('ROLLBACK'); res.status(500).json({ error: e.message }); } finally { client.release(); }
-});
-
-app.listen(PORT, () => console.log(`Servidor activo en puerto ${PORT}`));

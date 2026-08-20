@@ -414,7 +414,8 @@ app.delete('/api/admin/movimientos/:tipo/:id', verificarToken, verificarRol(['Ma
 // EXCEL DE REPORTES (CON FORMATO CONTABLE)
 // ==========================================
 app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => {
-    const { tipo, inicio, fin } = req.query;
+    // 1. Agregamos centro_costo a los parámetros recibidos
+    const { tipo, inicio, fin, centro_costo } = req.query; 
     try {
         const userQuery = await pool.query('SELECT nombre FROM usuarios WHERE id = $1', [req.user.id]);
         const userName = userQuery.rows.length > 0 ? userQuery.rows[0].nombre : 'Usuario Sistema';
@@ -425,6 +426,10 @@ app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => 
         let query = ''; 
         const fechaInicio = inicio ? new Date(inicio + 'T00:00:00') : new Date('2000-01-01'); 
         const fechaFin = fin ? new Date(`${fin}T23:59:59.999Z`) : new Date();
+
+        // 2. Preparamos los parámetros dinámicos para la consulta SQL
+        let params = [fechaInicio, fechaFin];
+        let paramIndex = 3;
 
         let fechaInicioStr = 'INICIO';
         let fechaFinStr = 'ACTUALIDAD';
@@ -442,17 +447,27 @@ app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => 
                      FROM entradas e JOIN productos p ON e.producto_id = p.id LEFT JOIN usuarios u ON e.usuario_id = u.id 
                      WHERE e.fecha >= $1 AND e.fecha <= $2 ORDER BY e.fecha DESC`;
         } else {
+            // 3. Agregamos la columna y el cruce (JOIN) del Centro de Costo para las Salidas
             worksheet.columns = [ 
                 { header: 'Salida', key: 'id_lote', width: 12 }, { header: 'SKU', key: 'sku', width: 15 }, 
                 { header: 'Producto', key: 'producto_nombre', width: 35 }, { header: 'Cant.', key: 'cantidad', width: 15 }, 
                 { header: 'Costo Unit.', key: 'costo_unitario', width: 15 }, { header: 'Costo Total ($)', key: 'costo_total', width: 18 },
+                { header: 'Centro de Costo', key: 'centro_costo_nombre', width: 25 },
                 { header: 'Concepto', key: 'concepto', width: 35 }, { header: 'Usuario', key: 'usuario_nombre', width: 20 }, { header: 'Fecha', key: 'fecha', width: 22 } 
             ];
-            query = `SELECT s.id, p.sku, p.nombre AS producto_nombre, s.cantidad, s.concepto, s.fecha, u.nombre AS usuario_nombre, e.costo_unitario 
+            query = `SELECT s.id, p.sku, p.nombre AS producto_nombre, s.cantidad, s.concepto, s.fecha, u.nombre AS usuario_nombre, e.costo_unitario, cc.nombre AS centro_costo_nombre 
                      FROM salidas s JOIN productos p ON s.producto_id = p.id 
                      LEFT JOIN entradas e ON s.lote_origen_id = e.id 
                      LEFT JOIN usuarios u ON s.usuario_id = u.id 
-                     WHERE s.fecha >= $1 AND s.fecha <= $2 ORDER BY s.fecha DESC`;
+                     LEFT JOIN centros_costo cc ON s.centro_costo_id = cc.id 
+                     WHERE s.fecha >= $1 AND s.fecha <= $2`;
+            
+            // 4. Si se envió el filtro de centro de costo, lo agregamos a la consulta
+            if (centro_costo) {
+                query += ` AND s.centro_costo_id = $${paramIndex++}`;
+                params.push(centro_costo);
+            }
+            query += ` ORDER BY s.fecha DESC`;
         }
 
         worksheet.spliceRows(1, 0, [], [], [], []);
@@ -494,7 +509,8 @@ app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => 
         });
         worksheet.autoFilter = { from: 'A5', to: 'I5' };
 
-        const resultado = await pool.query(query, [fechaInicio, fechaFin]);
+        // 5. Ejecutamos la consulta usando nuestros parámetros dinámicos
+        const resultado = await pool.query(query, params);
 
         resultado.rows.forEach(r => {
             const cantidad = parseFloat(r.cantidad);
@@ -507,6 +523,7 @@ app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => 
                 cantidad: cantidad,
                 costo_unitario: costoUnit,
                 costo_total: costoTotal,
+                centro_costo_nombre: r.centro_costo_nombre || 'General / Sin Centro', // Llenamos la celda
                 usuario_nombre: r.usuario_nombre || 'Sistema', 
                 fecha: new Date(r.fecha).toLocaleString('es-VE', { timeZone: 'America/Caracas' }) 
             });
@@ -561,11 +578,13 @@ app.get('/api/reporte/entradas', verificarToken, async (req, res) => {
 });
 
 app.get('/api/reporte/salidas', verificarToken, async (req, res) => {
-    const { inicio, fin, producto, categoria, almacen } = req.query;
-    let query = `SELECT s.id, p.sku, p.nombre AS producto_nombre, p.unidad_medida, c.almacen, s.cantidad, s.concepto, s.fecha, s.lote_origen_id 
+    // 6. Agregamos centro_costo a los parámetros extraídos
+    const { inicio, fin, producto, categoria, almacen, centro_costo } = req.query;
+    let query = `SELECT s.id, p.sku, p.nombre AS producto_nombre, p.unidad_medida, c.almacen, s.cantidad, s.concepto, s.fecha, s.lote_origen_id, cc.nombre AS centro_costo_nombre 
                  FROM salidas s 
                  JOIN productos p ON s.producto_id = p.id 
-                 LEFT JOIN categorias c ON p.categoria_id = c.id WHERE 1=1`;
+                 LEFT JOIN categorias c ON p.categoria_id = c.id 
+                 LEFT JOIN centros_costo cc ON s.centro_costo_id = cc.id WHERE 1=1`;
     let params = [];
     let paramIndex = 1;
 
@@ -585,6 +604,11 @@ app.get('/api/reporte/salidas', verificarToken, async (req, res) => {
         query += ` AND c.almacen = $${paramIndex++}`;
         params.push(almacen);
     }
+    // 7. Filtro lógico para Centro de Costo en JSON
+    if (centro_costo) {
+        query += ` AND s.centro_costo_id = $${paramIndex++}`;
+        params.push(centro_costo);
+    }
 
     query += ` ORDER BY s.fecha DESC;`;
     
@@ -603,6 +627,7 @@ app.get('/api/reporte/logs', verificarToken, verificarRol(['Master', 'Administra
         res.status(500).json({ error: 'Error al consultar auditoría' }); 
     }
 });
+
 
 // ==========================================
 // CARGA MASIVA EXCEL (CON SOPORTE DE FECHAS)

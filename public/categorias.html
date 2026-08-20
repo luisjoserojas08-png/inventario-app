@@ -9,302 +9,300 @@
       tailwind.config = { theme: { extend: { colors: { corporate: { dark: '#0f172a', primary: '#1e40af', light: '#f8fafc', border: '#e2e8f0' } } } } }
     </script>
 </head>
-<body class="bg-corporate-light font-sans text-slate-800 subpixel-antialiased">
+<body class="bg-corporate-light font-sans text-slate-800">
 
   <script>
     const token = localStorage.getItem('erp_token') || localStorage.getItem('token');
     if (!token) window.location.href = 'login.html';
-    function parseJwt(t) { try { return JSON.parse(atob(t.split('.')[1])); } catch (e) { return null; } }
-    const currentUser = parseJwt(token);
-    if (currentUser) {
-      // 1. Ocultar Gestión de Usuarios a todos menos al rol 'Master'
-      if (currentUser.rol !== 'Master') {
-        document.querySelectorAll('.master-only').forEach(el => el.style.display = 'none');
-      }
-      
-      // 2. Bloqueo visual para el rol 'Consulta' (Solo lectura - esconde formularios y botones de acción)
-      if (currentUser.rol === 'Consulta') {
-        document.querySelectorAll('form button[type="submit"]').forEach(el => el.style.display = 'none');
-        document.querySelectorAll('button[onclick*="prepararEdicion"]').forEach(el => el.style.display = 'none');
-        document.querySelectorAll('button[onclick*="guardar"]').forEach(el => el.style.display = 'none');
-      }
-    }
   </script>
 
   <div class="flex h-screen overflow-hidden">
-   <aside class="w-64 bg-corporate-dark text-slate-300 flex flex-col hidden md:flex">
+    <!-- Sidebar -->
+    <aside class="w-64 bg-corporate-dark text-slate-300 flex flex-col hidden md:flex shrink-0">
       <div class="p-6 text-xl font-bold text-white tracking-wider border-b border-slate-800">ERP Genética</div>
-                 <nav class="flex-1 p-4 space-y-2 overflow-y-auto">
+      <nav class="flex-1 p-4 space-y-2 overflow-y-auto">
         <a href="index.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📊 Dashboard Inventario</a>
         <a href="costeo.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">💰 Costeo de Existencias</a>
         <a href="productos.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📦 Maestro de Productos</a>
         <a href="entradas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📥 Registro de Compras</a>
         <a href="salidas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📤 Registro de Salidas</a>
         <a href="reportes.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📑 Historial y Reportes</a>
-        <a href="categorias.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🏷️ Categorías y Almacén</a>
+        <a href="categorias.html" class="block px-4 py-2.5 rounded-lg bg-corporate-primary text-white font-medium shadow-xs">🏷️ Categorías y Almacén</a>
         <a href="carga.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📂 Carga Masiva</a>
         <a href="usuarios.html" class="master-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">👥 Gestión de Usuarios</a>
         <a href="auditoria.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🛡️ Auditoría del Sistema</a>
       </nav>
-      <div class="p-4 border-t border-slate-800 text-xs text-slate-500">Sesión Activa • Neon DB</div>
+      <div class="p-4 border-t border-slate-800 text-xs text-slate-500">Sesión Activa</div>
     </aside>
 
+    <!-- Main -->
     <div class="flex-1 flex flex-col overflow-y-auto">
-      <header class="bg-white border-b h-16 flex items-center justify-between px-8 shadow-xs">
-        <h1 class="text-lg font-semibold text-slate-700">Mantenimiento de Categorías y Almacenes</h1>
-        <button onclick="localStorage.clear(); window.location.href='login.html'" class="text-sm text-red-600 font-medium bg-red-50 px-3 py-1.5 rounded-lg hover:bg-red-100 transition">Cerrar Sesión</button>
+      <header class="bg-white border-b h-16 flex items-center justify-between px-8 shadow-xs shrink-0">
+        <h1 class="text-lg font-semibold text-slate-700">Mantenimiento de Catálogos Maestros</h1>
       </header>
 
       <main class="p-8 flex flex-col lg:flex-row gap-8">
         
-        <!-- Columna Izquierda: Formularios -->
-        <div class="w-full lg:w-1/3 flex flex-col gap-6">
+        <!-- Formularios (Izquierda) -->
+        <div class="w-full lg:w-1/3 space-y-6">
             
-          <!-- Formulario: Nuevo Almacén -->
-          <div class="bg-white rounded-xl border border-corporate-border p-6 shadow-xs">
-            <h3 class="font-bold text-slate-700 border-b pb-3 mb-4">1. Crear Nuevo Almacén</h3>
-            <form id="form-alm" class="space-y-4">
-              <div>
-                <label class="block text-sm font-medium mb-1">Nombre del Almacén</label>
-                <input type="text" id="nombre-alm" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary" placeholder="Ej: Planta 2, Cuarto Frío...">
-              </div>
-              <div id="msg-alm" class="hidden px-4 py-3 rounded-lg text-sm font-medium"></div>
-              <button type="submit" class="w-full bg-slate-800 text-white py-2.5 rounded-lg font-medium hover:bg-slate-900 transition shadow-xs">Guardar Almacén</button>
-            </form>
-          </div>
+            <!-- Crear Almacén -->
+            <div class="bg-white p-6 rounded-xl border shadow-xs">
+                <h3 class="font-bold text-slate-700 border-b pb-2 mb-4">1. Crear Nuevo Almacén</h3>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Nombre del Almacén</label>
+                        <input type="text" id="nombre-almacen" class="w-full px-3 py-2 border rounded-md" placeholder="Ej: Planta 2, Cuarto Frío...">
+                    </div>
+                    <button onclick="guardarAlmacen()" class="w-full bg-slate-800 text-white py-2 rounded-md font-medium hover:bg-slate-900 transition">Guardar Almacén</button>
+                </div>
+            </div>
 
-          <!-- Formulario: Nueva Categoría -->
-          <div class="bg-slate-50 rounded-xl border border-corporate-border p-6 shadow-xs">
-            <h3 class="font-bold text-slate-700 border-b pb-3 mb-4">2. Gestión de Categoría</h3>
-            <form id="form-cat" class="space-y-4">
-              <div>
-                <label class="block text-sm font-medium mb-1">Nombre de la Categoría</label>
-                <input type="text" id="nombre-cat" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary" placeholder="Ej: Insumos Químicos">
-              </div>
-              <div>
-                <label class="block text-sm font-medium mb-1">Seleccionar Almacén de Destino</label>
-                <select id="almacen-cat" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary bg-white">
-                    <!-- Se llena con JS -->
-                </select>
-              </div>
-              <div id="msg-cat" class="hidden px-4 py-3 rounded-lg text-sm font-medium"></div>
-              <button type="submit" class="w-full bg-corporate-primary text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 transition shadow-xs">Guardar Categoría</button>
-            </form>
-          </div>
+            <!-- Crear Categoría -->
+            <div class="bg-white p-6 rounded-xl border shadow-xs">
+                <h3 class="font-bold text-slate-700 border-b pb-2 mb-4">2. Gestión de Categoría</h3>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Nombre de Categoría</label>
+                        <input type="text" id="nombre-categoria" class="w-full px-3 py-2 border rounded-md">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Seleccionar Almacén</label>
+                        <select id="almacen-destino" class="w-full px-3 py-2 border rounded-md"></select>
+                    </div>
+                    <button onclick="guardarCategoria()" class="w-full bg-orange-500 text-white py-2 rounded-md font-medium hover:bg-orange-600 transition">Guardar Categoría</button>
+                </div>
+            </div>
 
-          <!-- Formulario: Nuevo Centro de Costo (AÑADIDO) -->
-          <div class="bg-white rounded-xl border border-corporate-border p-6 shadow-xs">
-            <h3 class="font-bold text-slate-700 border-b pb-3 mb-4">3. Crear Centro de Costo</h3>
-            <form id="form-centro" class="space-y-4">
-              <div>
-                <label class="block text-sm font-medium mb-1">Código (3 dígitos)</label>
-                <input type="text" id="cc-codigo" required maxlength="3" pattern="[0-9]{3}" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary" placeholder="Ej: 200">
-              </div>
-              <div>
-                <label class="block text-sm font-medium mb-1">Nombre del Centro de Costo</label>
-                <input type="text" id="cc-nombre" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary" placeholder="Ej: Producción">
-              </div>
-              <div id="msg-centro" class="hidden px-4 py-3 rounded-lg text-sm font-medium"></div>
-              <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-lg font-medium transition shadow-xs">Registrar Centro</button>
-            </form>
-          </div>
-
+            <!-- Crear Centro de Costo -->
+            <div class="bg-white p-6 rounded-xl border shadow-xs">
+                <h3 class="font-bold text-slate-700 border-b pb-2 mb-4">3. Crear Centro de Costo</h3>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Código del Centro</label>
+                        <input type="text" id="codigo-centro" class="w-full px-3 py-2 border rounded-md" placeholder="Ej: 295">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Nombre del Centro</label>
+                        <input type="text" id="nombre-centro" class="w-full px-3 py-2 border rounded-md" placeholder="Ej: Larvario 1">
+                    </div>
+                    <button onclick="guardarCentro()" class="w-full bg-emerald-600 text-white py-2 rounded-md font-medium hover:bg-emerald-700 transition">Guardar Centro</button>
+                </div>
+            </div>
         </div>
 
-        <!-- Columna Derecha: Tablas -->
-        <div class="flex-1 flex flex-col gap-6">
+        <!-- Tablas de Registros (Derecha) -->
+        <div class="flex-1 space-y-6">
             
-          <!-- Tabla de Categorías Existentes -->
-          <div class="bg-white rounded-xl border border-corporate-border shadow-xs overflow-hidden">
-            <div class="px-6 py-4 border-b bg-slate-50 flex justify-between items-center">
-              <h3 class="font-bold text-slate-700">Categorías Asignadas</h3>
-              <button onclick="cargarTodo()" class="text-sm text-corporate-primary font-medium hover:underline">Actualizar</button>
+            <!-- Tabla Almacenes -->
+            <div class="bg-white rounded-xl border shadow-xs overflow-hidden">
+                <div class="px-6 py-4 border-b bg-slate-50"><h3 class="font-bold text-slate-700">Almacenes Registrados</h3></div>
+                <div class="overflow-x-auto max-h-48 overflow-y-auto">
+                    <table class="w-full text-left">
+                        <thead class="bg-white sticky top-0 border-b text-xs text-slate-500 uppercase">
+                            <tr><th class="px-6 py-2">ID</th><th class="px-6 py-2">Nombre Almacén</th><th class="px-6 py-2 text-right">Acciones</th></tr>
+                        </thead>
+                        <tbody id="tabla-almacenes" class="divide-y text-sm text-slate-600"></tbody>
+                    </table>
+                </div>
             </div>
-            <div class="overflow-x-auto max-h-96">
-              <table class="w-full text-left border-collapse">
-                <thead>
-                  <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b sticky top-0 shadow-sm">
-                    <th class="px-6 py-3 bg-slate-50">ID</th>
-                    <th class="px-6 py-3 bg-slate-50">Nombre Categoría</th>
-                    <th class="px-6 py-3 bg-slate-50">Ubicación / Almacén</th>
-                    <th class="px-6 py-3 bg-slate-50 text-right">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody id="tabla-cat" class="divide-y text-sm text-slate-600">
-                  <tr><td colspan="4" class="px-6 py-6 text-center text-slate-400">Cargando...</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
 
-          <!-- Tabla de Centros de Costo -->
-          <div class="bg-white rounded-xl border border-corporate-border shadow-xs overflow-hidden">
-            <div class="px-6 py-4 border-b bg-slate-50 flex justify-between items-center">
-              <h3 class="font-bold text-slate-700">Centros de Costo Activos</h3>
+            <!-- Tabla Categorías -->
+            <div class="bg-white rounded-xl border shadow-xs overflow-hidden">
+                <div class="px-6 py-4 border-b bg-slate-50"><h3 class="font-bold text-slate-700">Categorías Asignadas</h3></div>
+                <div class="overflow-x-auto max-h-64 overflow-y-auto">
+                    <table class="w-full text-left">
+                        <thead class="bg-white sticky top-0 border-b text-xs text-slate-500 uppercase">
+                            <tr><th class="px-6 py-2">ID</th><th class="px-6 py-2">Categoría</th><th class="px-6 py-2">Ubicación</th><th class="px-6 py-2 text-right">Acciones</th></tr>
+                        </thead>
+                        <tbody id="tabla-categorias" class="divide-y text-sm text-slate-600"></tbody>
+                    </table>
+                </div>
             </div>
-            <div class="overflow-x-auto max-h-96">
-              <table class="w-full text-left border-collapse">
-                <thead>
-                  <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b sticky top-0 shadow-sm">
-                    <th class="px-6 py-3 bg-slate-50">Código</th>
-                    <th class="px-6 py-3 bg-slate-50">Nombre del Centro</th>
-                  </tr>
-                </thead>
-                <tbody id="tabla-centros" class="divide-y text-sm text-slate-600">
-                  <tr><td colspan="2" class="px-6 py-6 text-center text-slate-400">Cargando...</td></tr>
-                </tbody>
-              </table>
+
+            <!-- Tabla Centros Costo -->
+            <div class="bg-white rounded-xl border shadow-xs overflow-hidden">
+                <div class="px-6 py-4 border-b bg-slate-50"><h3 class="font-bold text-slate-700">Centros de Costo Activos</h3></div>
+                <div class="overflow-x-auto max-h-64 overflow-y-auto">
+                    <table class="w-full text-left">
+                        <thead class="bg-white sticky top-0 border-b text-xs text-slate-500 uppercase">
+                            <tr><th class="px-6 py-2">Código</th><th class="px-6 py-2">Nombre del Centro</th><th class="px-6 py-2 text-right">Acciones</th></tr>
+                        </thead>
+                        <tbody id="tabla-centros" class="divide-y text-sm text-slate-600"></tbody>
+                    </table>
+                </div>
             </div>
-          </div>
 
         </div>
       </main>
     </div>
   </div>
 
+  <!-- Modales Genéricos de Edición -->
+  <div id="modal-editar" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-xl border p-6 w-full max-w-sm shadow-xl">
+        <h3 id="modal-title" class="font-bold text-lg mb-4 text-slate-700">Editar</h3>
+        <input type="hidden" id="edit-id">
+        <input type="hidden" id="edit-type">
+        
+        <div class="space-y-4">
+            <div id="field-codigo" class="hidden">
+                <label class="text-sm font-medium">Código</label>
+                <input type="text" id="edit-codigo" class="w-full p-2 border rounded mt-1">
+            </div>
+            <div>
+                <label class="text-sm font-medium">Nombre</label>
+                <input type="text" id="edit-nombre" class="w-full p-2 border rounded mt-1">
+            </div>
+            <div id="field-almacen" class="hidden">
+                <label class="text-sm font-medium">Ubicación / Almacén</label>
+                <select id="edit-almacen" class="w-full p-2 border rounded mt-1"></select>
+            </div>
+            
+            <div class="flex gap-2 pt-4">
+                <button onclick="guardarEdicion()" class="flex-1 bg-blue-600 text-white py-2 rounded font-medium hover:bg-blue-700">Actualizar</button>
+                <button onclick="cerrarModal()" class="flex-1 bg-slate-100 text-slate-700 py-2 rounded font-medium hover:bg-slate-200">Cancelar</button>
+            </div>
+        </div>
+    </div>
+  </div>
+
   <script>
-    if (currentUser && currentUser.rol !== 'Administrador') {
-      document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+    const headersConfig = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+    async function cargarDatosGenerales() {
+        try {
+            const [almRes, catRes, cenRes] = await Promise.all([
+                fetch('/api/almacenes', { headers: headersConfig }),
+                fetch('/api/categorias', { headers: headersConfig }),
+                fetch('/api/centros-costo', { headers: headersConfig })
+            ]);
+            
+            const almacenes = await almRes.json();
+            const categorias = await catRes.json();
+            const centros = await cenRes.json();
+
+            // Llenar Selects
+            let almOpciones = almacenes.map(a => `<option value="${a.nombre}">${a.nombre}</option>`).join('');
+            document.getElementById('almacen-destino').innerHTML = almOpciones;
+            document.getElementById('edit-almacen').innerHTML = almOpciones;
+
+            // Llenar Tablas (Almacenes)
+            document.getElementById('tabla-almacenes').innerHTML = almacenes.map(a => `
+                <tr class="hover:bg-slate-50">
+                    <td class="px-6 py-2 font-mono text-xs">#${a.id}</td>
+                    <td class="px-6 py-2 font-bold">${a.nombre}</td>
+                    <td class="px-6 py-2 text-right">
+                        <button onclick="abrirModal('almacenes', '${a.id}', '', '${a.nombre}', '')" class="text-blue-500 hover:text-blue-700 mr-3">✏️</button>
+                        <button onclick="eliminarRegistro('almacenes', '${a.id}', '${a.nombre}')" class="text-red-500 hover:text-red-700 font-bold">🗑️</button>
+                    </td>
+                </tr>`).join('');
+
+            // Llenar Tablas (Categorías)
+            document.getElementById('tabla-categorias').innerHTML = categorias.map(c => `
+                <tr class="hover:bg-slate-50">
+                    <td class="px-6 py-2 font-mono text-xs">#${c.id}</td>
+                    <td class="px-6 py-2 font-bold">${c.nombre}</td>
+                    <td class="px-6 py-2 text-blue-600 text-xs">${c.almacen}</td>
+                    <td class="px-6 py-2 text-right">
+                        <button onclick="abrirModal('categorias', '${c.id}', '', '${c.nombre}', '${c.almacen}')" class="text-blue-500 hover:text-blue-700 mr-3">✏️</button>
+                        <button onclick="eliminarRegistro('categorias', '${c.id}', '${c.nombre}')" class="text-red-500 hover:text-red-700 font-bold">🗑️</button>
+                    </td>
+                </tr>`).join('');
+
+            // Llenar Tablas (Centros)
+            document.getElementById('tabla-centros').innerHTML = centros.map(c => `
+                <tr class="hover:bg-slate-50">
+                    <td class="px-6 py-2 font-mono font-bold">${c.codigo}</td>
+                    <td class="px-6 py-2 font-medium">${c.nombre}</td>
+                    <td class="px-6 py-2 text-right">
+                        <button onclick="abrirModal('centros-costo', '${c.id}', '${c.codigo}', '${c.nombre}', '')" class="text-blue-500 hover:text-blue-700 mr-3">✏️</button>
+                        <button onclick="eliminarRegistro('centros-costo', '${c.id}', '${c.nombre}')" class="text-red-500 hover:text-red-700 font-bold">🗑️</button>
+                    </td>
+                </tr>`).join('');
+                
+        } catch (error) { console.error("Error cargando catálogos:", error); }
     }
 
-    async function descargarReporte() {
-      const res = await fetch('/api/reporte-salidas', { headers: { 'Authorization': `Bearer ${token}` } });
-      const blob = await res.blob();
-      const a = document.createElement('a');
-      a.href = window.URL.createObjectURL(blob); a.download = 'reporte_inventario_general.xlsx';
-      a.click();
+    // Funciones de Guardado Rápido (Creación)
+    async function guardarAlmacen() {
+        const nombre = document.getElementById('nombre-almacen').value;
+        if (!nombre) return;
+        await fetch('/api/almacenes', { method: 'POST', headers: headersConfig, body: JSON.stringify({ nombre }) });
+        document.getElementById('nombre-almacen').value = ''; cargarDatosGenerales();
+    }
+    
+    async function guardarCategoria() {
+        const nombre = document.getElementById('nombre-categoria').value;
+        const almacen = document.getElementById('almacen-destino').value;
+        if (!nombre) return;
+        await fetch('/api/categorias', { method: 'POST', headers: headersConfig, body: JSON.stringify({ nombre, almacen }) });
+        document.getElementById('nombre-categoria').value = ''; cargarDatosGenerales();
     }
 
-    async function cargarTodo() {
-      try {
-        // Cargar almacenes para el select
-        const resAlm = await fetch('/api/almacenes', { headers: { 'Authorization': `Bearer ${token}` } });
-        const almacenes = await resAlm.json();
-        const selectAlm = document.getElementById('almacen-cat');
-        selectAlm.innerHTML = almacenes.map(a => `<option value="${a.nombre}">${a.nombre}</option>`).join('');
+    async function guardarCentro() {
+        const codigo = document.getElementById('codigo-centro').value;
+        const nombre = document.getElementById('nombre-centro').value;
+        if (!codigo || !nombre) return;
+        await fetch('/api/centros-costo', { method: 'POST', headers: headersConfig, body: JSON.stringify({ codigo, nombre }) });
+        document.getElementById('codigo-centro').value = ''; document.getElementById('nombre-centro').value = ''; cargarDatosGenerales();
+    }
 
-        // Cargar categorías para la tabla
-        const resCat = await fetch('/api/categorias', { headers: { 'Authorization': `Bearer ${token}` } });
-        const categorias = await resCat.json();
-        const tbodyCat = document.getElementById('tabla-cat');
+    // Modal de Edición Dinámico
+    function abrirModal(tipo, id, codigo, nombre, almacen) {
+        document.getElementById('edit-id').value = id;
+        document.getElementById('edit-type').value = tipo;
+        document.getElementById('edit-nombre').value = nombre;
         
-        if (!categorias.length) {
-          tbodyCat.innerHTML = `<tr><td colspan="4" class="px-6 py-6 text-center text-slate-400">No hay categorías registradas.</td></tr>`;
+        document.getElementById('field-codigo').classList.toggle('hidden', tipo !== 'centros-costo');
+        document.getElementById('field-almacen').classList.toggle('hidden', tipo !== 'categorias');
+
+        if (tipo === 'centros-costo') {
+            document.getElementById('edit-codigo').value = codigo;
+            document.getElementById('modal-title').innerText = 'Editar Centro de Costo';
+        } else if (tipo === 'categorias') {
+            document.getElementById('edit-almacen').value = almacen;
+            document.getElementById('modal-title').innerText = 'Editar Categoría';
         } else {
-          tbodyCat.innerHTML = categorias.map(c => `
-            <tr class="hover:bg-slate-50 transition">
-              <td class="px-6 py-4 font-mono font-medium text-slate-500">#${c.id}</td>
-              <td class="px-6 py-4 font-bold text-slate-800">${c.nombre}</td>
-              <td class="px-6 py-4"><span class="bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full text-xs font-semibold">${c.almacen || 'Almacén Principal'}</span></td>
-              <td class="px-6 py-4 text-right">
-                <button onclick="prepararEdicionCategoria(${c.id}, '${c.nombre}', '${c.almacen || ''}')" class="text-amber-600 hover:text-amber-800 font-medium text-sm bg-amber-50 px-3 py-1 rounded-md">✏️ Editar</button>
-              </td>
-            </tr>
-          `).join('');
+            document.getElementById('modal-title').innerText = 'Editar Almacén';
         }
 
-        // Cargar Centros de Costo para la tabla nueva
-        const resCC = await fetch('/api/centros-costo', { headers: { 'Authorization': `Bearer ${token}` } });
-        const centros = await resCC.json();
-        const tbodyCC = document.getElementById('tabla-centros');
-        
-        if (!centros.length) {
-          tbodyCC.innerHTML = `<tr><td colspan="2" class="px-6 py-6 text-center text-slate-400">No hay centros de costo registrados.</td></tr>`;
-        } else {
-          tbodyCC.innerHTML = centros.map(c => `
-            <tr class="hover:bg-slate-50 transition">
-              <td class="px-6 py-4 font-mono font-bold text-slate-700">${c.codigo}</td>
-              <td class="px-6 py-4 font-medium text-slate-800">${c.nombre}</td>
-            </tr>
-          `).join('');
-        }
-
-      } catch (err) { console.error("Error al cargar datos", err); }
+        document.getElementById('modal-editar').classList.remove('hidden');
     }
 
-    // --- LÓGICA DE EDICIÓN DE CATEGORÍAS ---
-    let editandoCategoriaId = null;
+    function cerrarModal() { document.getElementById('modal-editar').classList.add('hidden'); }
 
-    window.prepararEdicionCategoria = function(id, nombre, almacen) {
-        editandoCategoriaId = id;
-        document.getElementById('nombre-cat').value = nombre;
-        document.getElementById('almacen-cat').value = almacen;
+    async function guardarEdicion() {
+        const id = document.getElementById('edit-id').value;
+        const tipo = document.getElementById('edit-type').value;
+        const payload = { nombre: document.getElementById('edit-nombre').value };
         
-        const btn = document.querySelector('#form-cat button');
-        btn.textContent = 'Actualizar Categoría';
-        btn.className = "w-full bg-amber-500 text-white py-2.5 rounded-lg font-medium hover:bg-amber-600 transition shadow-xs";
-        window.scrollTo({ top: 0, behavior: 'smooth' }); // Sube la pantalla
-    };
+        if (tipo === 'centros-costo') payload.codigo = document.getElementById('edit-codigo').value;
+        if (tipo === 'categorias') payload.almacen = document.getElementById('edit-almacen').value;
 
-    // Guardar o Actualizar Categoría
-    document.getElementById('form-cat').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const msg = document.getElementById('msg-cat');
-      const url = editandoCategoriaId ? `/api/categorias/${editandoCategoriaId}` : '/api/categorias';
-      const method = editandoCategoriaId ? 'PUT' : 'POST';
+        try {
+            const res = await fetch(`/api/${tipo}/${id}`, { method: 'PUT', headers: headersConfig, body: JSON.stringify(payload) });
+            if (res.ok) { cerrarModal(); cargarDatosGenerales(); }
+            else alert("Error al actualizar. Posiblemente faltan permisos.");
+        } catch (e) { console.error(e); }
+    }
 
-      try {
-        const res = await fetch(url, {
-          method: method,
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify({ 
-              nombre: document.getElementById('nombre-cat').value,
-              almacen: document.getElementById('almacen-cat').value 
-          })
-        });
-        const data = await res.json();
-        msg.className = `px-4 py-3 rounded-lg text-sm font-medium block mt-2 ${res.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`;
-        msg.textContent = res.ok ? `✅ ${data.mensaje || 'Categoría registrada.'}` : `❌ ${data.error}`;
-        
-        if(res.ok) { 
-            document.getElementById('form-cat').reset(); 
-            editandoCategoriaId = null;
-            const btn = document.querySelector('#form-cat button');
-            btn.textContent = 'Guardar Categoría';
-            btn.className = "w-full bg-corporate-primary text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 transition shadow-xs";
-            cargarTodo(); 
-        }
-      } catch (error) { console.error(error); }
-    });
+    // Función de Eliminación
+    async function eliminarRegistro(tipo, id, nombre) {
+        if (!confirm(`⚠️ ATENCIÓN: ¿Estás seguro que deseas eliminar "${nombre}"?\n\nSi este elemento está en uso en el inventario o reportes, el sistema impedirá su borrado.`)) return;
 
-    // Guardar Almacén
-    document.getElementById('form-alm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const msg = document.getElementById('msg-alm');
-      try {
-        const res = await fetch('/api/almacenes', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify({ nombre: document.getElementById('nombre-alm').value })
-        });
-        const data = await res.json();
-        msg.className = `px-4 py-3 rounded-lg text-sm font-medium block mt-2 ${res.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`;
-        msg.textContent = res.ok ? '✅ Almacén creado.' : `❌ ${data.error}`;
-        if(res.ok) { document.getElementById('form-alm').reset(); cargarTodo(); }
-      } catch (error) { console.error(error); }
-    });
+        try {
+            const res = await fetch(`/api/${tipo}/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+            const data = await res.json();
+            if (res.ok) {
+                cargarDatosGenerales();
+            } else {
+                alert(`❌ No se pudo eliminar:\n${data.error}`);
+            }
+        } catch (e) { alert("Error de conexión al servidor."); }
+    }
 
-    // Guardar Centro de Costo
-    document.getElementById('form-centro').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const msg = document.getElementById('msg-centro');
-      try {
-        const res = await fetch('/api/centros-costo', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify({
-            codigo: document.getElementById('cc-codigo').value,
-            nombre: document.getElementById('cc-nombre').value
-          })
-        });
-        const data = await res.json();
-        msg.className = `px-4 py-3 rounded-lg text-sm font-medium block mt-2 ${res.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`;
-        msg.textContent = res.ok ? '✅ Centro de Costo registrado.' : `❌ ${data.error}`;
-        if(res.ok) { document.getElementById('form-centro').reset(); cargarTodo(); }
-      } catch (error) { console.error(error); }
-    });
-
-    cargarTodo();
+    cargarDatosGenerales();
   </script>
 </body>
 </html>

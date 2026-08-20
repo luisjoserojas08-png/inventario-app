@@ -153,6 +153,18 @@ app.post('/api/almacenes', verificarToken, verificarRol(['Master', 'Administrado
 app.get('/api/almacenes', verificarToken, async (req, res) => {
     try { res.json((await pool.query('SELECT * FROM almacenes ORDER BY nombre ASC')).rows); } catch (e) { res.status(500).json({ error: 'Error' }); }
 });
+app.put('/api/almacenes/:id', verificarToken, verificarRol(['Master', 'Administrador']), async (req, res) => {
+    try {
+        await pool.query('UPDATE almacenes SET nombre = $1 WHERE id = $2', [req.body.nombre, req.params.id]);
+        res.json({ mensaje: 'Almacén actualizado' });
+    } catch (error) { res.status(500).json({ error: 'Error al actualizar almacén' }); }
+});
+app.delete('/api/almacenes/:id', verificarToken, verificarRol(['Master', 'Administrador']), async (req, res) => {
+    try {
+        await pool.query('DELETE FROM almacenes WHERE id = $1', [req.params.id]);
+        res.json({ mensaje: 'Almacén eliminado' });
+    } catch (error) { res.status(400).json({ error: 'No se puede eliminar. Verifica que no tenga categorías asignadas.' }); }
+});
 
 app.post('/api/categorias', verificarToken, verificarRol(['Master', 'Administrador']), async (req, res) => {
     try {
@@ -163,12 +175,17 @@ app.post('/api/categorias', verificarToken, verificarRol(['Master', 'Administrad
 app.get('/api/categorias', verificarToken, async (req, res) => {
     try { res.json((await pool.query('SELECT * FROM categorias ORDER BY nombre ASC')).rows); } catch (e) { res.status(500).json({ error: 'Error' }); }
 });
-
 app.put('/api/categorias/:id', verificarToken, verificarRol(['Master', 'Administrador']), async (req, res) => {
     try {
         await pool.query('UPDATE categorias SET nombre = $1, almacen = $2 WHERE id = $3', [req.body.nombre, req.body.almacen, req.params.id]);
         res.json({ mensaje: 'Categoría actualizada correctamente' });
     } catch (error) { res.status(500).json({ error: 'Error al actualizar' }); }
+});
+app.delete('/api/categorias/:id', verificarToken, verificarRol(['Master', 'Administrador']), async (req, res) => {
+    try {
+        await pool.query('DELETE FROM categorias WHERE id = $1', [req.params.id]);
+        res.json({ mensaje: 'Categoría eliminada' });
+    } catch (error) { res.status(400).json({ error: 'No se puede eliminar. Probablemente tiene productos asignados.' }); }
 });
 
 // ==========================================
@@ -182,6 +199,18 @@ app.post('/api/centros-costo', verificarToken, verificarRol(['Master', 'Administ
 });
 app.get('/api/centros-costo', verificarToken, async (req, res) => {
     try { res.json((await pool.query('SELECT * FROM centros_costo ORDER BY codigo ASC')).rows); } catch (e) { res.status(500).json({ error: 'Error' }); }
+});
+app.put('/api/centros-costo/:id', verificarToken, verificarRol(['Master', 'Administrador']), async (req, res) => {
+    try {
+        await pool.query('UPDATE centros_costo SET codigo = $1, nombre = $2 WHERE id = $3', [req.body.codigo, req.body.nombre, req.params.id]);
+        res.json({ mensaje: 'Centro actualizado' });
+    } catch (error) { res.status(500).json({ error: 'Error al actualizar' }); }
+});
+app.delete('/api/centros-costo/:id', verificarToken, verificarRol(['Master', 'Administrador']), async (req, res) => {
+    try {
+        await pool.query('DELETE FROM centros_costo WHERE id = $1', [req.params.id]);
+        res.json({ mensaje: 'Centro eliminado' });
+    } catch (error) { res.status(400).json({ error: 'No se puede eliminar. Está en uso en el historial contable.' }); }
 });
 
 // ==========================================

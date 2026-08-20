@@ -325,16 +325,30 @@ app.delete('/api/admin/movimientos/:tipo/:id', verificarToken, verificarRol(['Ma
 app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => {
     const { tipo, inicio, fin } = req.query;
     try {
+        // 1. Obtener el nombre real del usuario que hace la descarga para la auditoría
+        const userQuery = await pool.query('SELECT nombre FROM usuarios WHERE id = $1', [req.user.id]);
+        const userName = userQuery.rows.length > 0 ? userQuery.rows[0].nombre : 'Usuario Sistema';
+
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet(`Reporte de ${tipo.toUpperCase()}`);
-        let query = ''; const fechaInicio = inicio ? new Date(inicio) : new Date('2000-01-01'); const fechaFin = fin ? new Date(`${fin}T23:59:59.999Z`) : new Date();
+        
+        let query = ''; 
+        const fechaInicio = inicio ? new Date(inicio + 'T00:00:00') : new Date('2000-01-01'); 
+        const fechaFin = fin ? new Date(`${fin}T23:59:59.999Z`) : new Date();
 
+        // 2. Dar formato a las fechas para el título (DD/MM/YYYY)
+        let fechaInicioStr = 'INICIO';
+        let fechaFinStr = 'ACTUALIDAD';
+        if (inicio) { const [y, m, d] = inicio.split('-'); fechaInicioStr = `${d}/${m}/${y}`; }
+        if (fin) { const [y, m, d] = fin.split('-'); fechaFinStr = `${d}/${m}/${y}`; }
+
+        // 3. Configurar las columnas (Se definen primero, luego las bajaremos)
         if (tipo === 'entradas') {
             worksheet.columns = [ 
                 { header: 'Lote', key: 'id_lote', width: 12 }, { header: 'SKU', key: 'sku', width: 15 }, 
-                { header: 'Producto', key: 'producto_nombre', width: 30 }, { header: 'Cant.', key: 'cantidad', width: 15 }, 
+                { header: 'Producto', key: 'producto_nombre', width: 35 }, { header: 'Cant.', key: 'cantidad', width: 15 }, 
                 { header: 'Costo Unit.', key: 'costo_unitario', width: 15 }, { header: 'Costo Total ($)', key: 'costo_total', width: 18 },
-                { header: 'Doc.', key: 'nro_documento', width: 15 }, { header: 'Usuario', key: 'usuario_nombre', width: 20 }, { header: 'Fecha', key: 'fecha', width: 20 } 
+                { header: 'Doc.', key: 'nro_documento', width: 15 }, { header: 'Usuario', key: 'usuario_nombre', width: 20 }, { header: 'Fecha', key: 'fecha', width: 22 } 
             ];
             query = `SELECT e.id, p.sku, p.nombre AS producto_nombre, e.cantidad, e.costo_unitario, e.nro_documento, e.fecha, u.nombre AS usuario_nombre 
                      FROM entradas e JOIN productos p ON e.producto_id = p.id LEFT JOIN usuarios u ON e.usuario_id = u.id 
@@ -342,38 +356,90 @@ app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => 
         } else {
             worksheet.columns = [ 
                 { header: 'Salida', key: 'id_lote', width: 12 }, { header: 'SKU', key: 'sku', width: 15 }, 
-                { header: 'Producto', key: 'producto_nombre', width: 30 }, { header: 'Cant.', key: 'cantidad', width: 15 }, 
+                { header: 'Producto', key: 'producto_nombre', width: 35 }, { header: 'Cant.', key: 'cantidad', width: 15 }, 
                 { header: 'Costo Unit.', key: 'costo_unitario', width: 15 }, { header: 'Costo Total ($)', key: 'costo_total', width: 18 },
-                { header: 'Concepto', key: 'concepto', width: 30 }, { header: 'Usuario', key: 'usuario_nombre', width: 20 }, { header: 'Fecha', key: 'fecha', width: 20 } 
+                { header: 'Concepto', key: 'concepto', width: 35 }, { header: 'Usuario', key: 'usuario_nombre', width: 20 }, { header: 'Fecha', key: 'fecha', width: 22 } 
             ];
-            // JOIN con entradas para traer el costo del lote de origen
             query = `SELECT s.id, p.sku, p.nombre AS producto_nombre, s.cantidad, s.concepto, s.fecha, u.nombre AS usuario_nombre, e.costo_unitario 
                      FROM salidas s JOIN productos p ON s.producto_id = p.id 
                      LEFT JOIN entradas e ON s.lote_origen_id = e.id 
                      LEFT JOIN usuarios u ON s.usuario_id = u.id 
                      WHERE s.fecha >= $1 AND s.fecha <= $2 ORDER BY s.fecha DESC`;
         }
+
+        // ==========================================
+        // DISEÑO DEL ENCABEZADO PROFESIONAL
+        // ==========================================
         
+        // 4. Bajar la tabla 4 filas para hacer espacio para el encabezado
+        worksheet.spliceRows(1, 0, [], [], [], []);
+
+        // 5. Título Principal y Subtítulo (Izquierda)
+        const tituloReporte = `HISTORIAL DE ${tipo.toUpperCase()} (DESDE ${fechaInicioStr} HASTA ${fechaFinStr})`;
+        const subtitulo = tipo === 'entradas' 
+            ? 'Imputación contable de ingresos al almacén y su valorización' 
+            : 'Imputación contable de consumos y salidas de inventario valorizadas';
+
+        worksheet.mergeCells('A1:F1');
+        const titleCell = worksheet.getCell('A1');
+        titleCell.value = tituloReporte;
+        titleCell.font = { size: 13, bold: true, color: { argb: 'FF1E40AF' } }; // Azul oscuro
+        titleCell.alignment = { vertical: 'middle', horizontal: 'left' };
+
+        worksheet.mergeCells('A2:F2');
+        const subCell = worksheet.getCell('A2');
+        subCell.value = subtitulo;
+        subCell.font = { size: 10, italic: true, color: { argb: 'FF475569' } }; // Gris oscuro
+
+        // 6. Datos de Auditoría (Derecha Superior)
+        const fechaActual = new Date().toLocaleDateString('es-VE', { timeZone: 'America/Caracas' });
+        const horaActual = new Date().toLocaleTimeString('es-VE', { timeZone: 'America/Caracas', hour12: true });
+
+        worksheet.mergeCells('G1:I1');
+        worksheet.getCell('G1').value = `Fecha de emisión: ${fechaActual} a las ${horaActual}`;
+        worksheet.getCell('G1').alignment = { horizontal: 'right' };
+        worksheet.getCell('G1').font = { size: 9, bold: true };
+
+        worksheet.mergeCells('G2:I2');
+        worksheet.getCell('G2').value = `Generado por: ${userName}`;
+        worksheet.getCell('G2').alignment = { horizontal: 'right' };
+        worksheet.getCell('G2').font = { size: 9 };
+
+        // 7. Estilos de la cabecera de la tabla (Ahora es la fila 5)
+        const headerRow = worksheet.getRow(5);
+        headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } };
+        headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+        worksheet.autoFilter = { from: 'A5', to: 'I5' }; // Filtros activos en la cabecera
+
+        // ==========================================
+        // INSERTAR Y FORMATEAR DATOS
+        // ==========================================
         const resultado = await pool.query(query, [fechaInicio, fechaFin]);
         
         resultado.rows.forEach(r => {
             const cantidad = parseFloat(r.cantidad);
             const costoUnit = parseFloat(r.costo_unitario) || 0;
-            const costoTotal = (cantidad * costoUnit).toFixed(2);
+            const costoTotal = (cantidad * costoUnit); // Lo mandamos como Number para que Excel lo sume
             
-            worksheet.addRow({ 
+            const newRow = worksheet.addRow({ 
                 ...r, 
                 id_lote: tipo === 'entradas' ? `LOT-${String(r.id).padStart(3, '0')}` : `SAL-${String(r.id).padStart(3, '0')}`,
+                cantidad: cantidad,
+                costo_unitario: costoUnit,
                 costo_total: costoTotal,
                 usuario_nombre: r.usuario_nombre || 'Sistema', 
-                fecha: new Date(r.fecha).toLocaleString('es-VE') 
+                fecha: new Date(r.fecha).toLocaleString('es-VE', { timeZone: 'America/Caracas' }) 
             });
+
+            // Darle formato contable nativo de Excel a los números y dólares
+            newRow.getCell('cantidad').numFmt = '#,##0.00';
+            newRow.getCell('costo_unitario').numFmt = '"$"#,##0.00';
+            newRow.getCell('costo_total').numFmt = '"$"#,##0.00';
         });
         
-        worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
-        worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } };
-        
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="Historial_${tipo}_${inicio || 'General'}.xlsx"`);
         await workbook.xlsx.write(res); res.end();
     } catch (error) { res.status(500).json({ error: 'Error al generar Excel: ' + error.message }); }
 });

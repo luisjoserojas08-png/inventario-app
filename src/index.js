@@ -364,22 +364,37 @@ app.put('/api/costeo/lotes/:id', verificarToken, verificarRol(['Master', 'Admini
 app.put('/api/admin/movimientos/:tipo/:id', verificarToken, verificarRol(['Master', 'Administrador']), async (req, res) => {
     const { tipo, id } = req.params; 
     
-    // CORRECCIÓN: Reemplazamos la coma por punto para que acepte formatos en español (ej: 187,98)
-    const nueva_cantidad = parseFloat(String(req.body.nueva_cantidad).replace(',', '.'));
+    // BLINDAJE EXTREMO: Capturamos el valor sin importar cómo lo llame el frontend
+    let rawCantidad = req.body.nueva_cantidad ?? req.body.cantidad ?? req.body.cantidad_nueva;
     
-    const { motivo } = req.body; 
-    const tabla = tipo === 'entrada' ? 'entradas' : 'salidas';
+    // Reemplazamos coma por punto para procesar los decimales en español
+    const nueva_cantidad = parseFloat(String(rawCantidad).replace(',', '.'));
+    
+    if (isNaN(nueva_cantidad)) {
+        return res.status(400).json({ error: 'Cantidad inválida. Verifica que el campo no esté vacío o mal formateado.' });
+    }
+
+    const motivo = req.body.motivo || 'Ajuste manual de inventario'; 
+    const tabla = (tipo === 'entrada' || tipo === 'entradas') ? 'entradas' : 'salidas';
     const client = await pool.connect();
     
     try {
         await client.query('BEGIN');
         const reg = await client.query(`SELECT * FROM ${tabla} WHERE id = $1`, [id]);
-        if (reg.rows.length === 0) throw new Error('Registro no encontrado');
-        const mov = reg.rows[0]; const diferencia = nueva_cantidad - parseFloat(mov.cantidad);
+        if (reg.rows.length === 0) throw new Error('Registro no encontrado en la base de datos');
+        
+        const mov = reg.rows[0]; 
+        // Nos aseguramos de que los valores numéricos de la BD no sean nulos
+        const cantOriginal = parseFloat(mov.cantidad) || 0;
+        const diferencia = nueva_cantidad - cantOriginal;
 
-        if (tipo === 'entrada') {
-            const consumido = parseFloat(mov.cantidad) - parseFloat(mov.stock_restante);
-            if (nueva_cantidad < consumido) throw new Error(`Este lote ya tiene consumido ${consumido}`);
+        if (tabla === 'entradas') {
+            const stockRestanteOriginal = parseFloat(mov.stock_restante) || 0;
+            const consumido = cantOriginal - stockRestanteOriginal;
+
+            if (nueva_cantidad < consumido) {
+                throw new Error(`Este lote ya tiene consumido ${consumido}. No puedes reducirlo a un valor menor.`);
+            }
             await client.query('UPDATE entradas SET cantidad = $1, stock_restante = $1 - $2 WHERE id = $3', [nueva_cantidad, consumido, id]);
             await client.query('UPDATE productos SET stock_actual = stock_actual + $1 WHERE id = $2', [diferencia, mov.producto_id]);
         } else {
@@ -387,8 +402,42 @@ app.put('/api/admin/movimientos/:tipo/:id', verificarToken, verificarRol(['Maste
             else if (diferencia < 0) await restaurarStock(client, mov.producto_id, Math.abs(diferencia));
             await client.query('UPDATE salidas SET cantidad = $1 WHERE id = $2', [nueva_cantidad, id]);
         }
-        await client.query('INSERT INTO logs_auditoria (usuario_id, accion, tabla_afectada, registro_id, detalles) VALUES ($1, $2, $3, $4, $5)', [req.user.id, 'EDICION', tabla, id, JSON.stringify({ cantidad_anterior: mov.cantidad, cantidad_nueva: nueva_cantidad, motivo })]);
-        await client.query('COMMIT'); res.json({ mensaje: 'Editado con éxito' });
+        
+        await client.query('INSERT INTO logs_auditoria (usuario_id, accion, tabla_afectada, registro_id, detalles) VALUES ($1, $2, $3, $4, $5)', 
+            [req.user.id, 'EDICION', tabla, id, JSON.stringify({ cantidad_anterior: cantOriginal, cantidad_nueva: nueva_cantidad, motivo })]);
+            
+        await client.query('COMMIT'); 
+        res.status(200).json({ mensaje: 'Editado con éxito' });
+    } catch (error) { 
+        await client.query('ROLLBACK'); 
+        console.error("Error en edición:", error);
+        res.status(400).json({ error: error.message }); 
+    } finally { 
+        client.release(); 
+    }
+});
+
+app.delete('/api/admin/movimientos/:tipo/:id', verificarToken, verificarRol(['Master', 'Administrador']), async (req, res) => {
+    const { tipo, id } = req.params; 
+    const { motivo } = req.body; 
+    const tabla = (tipo === 'entrada' || tipo === 'entradas') ? 'entradas' : 'salidas';
+    const client = await pool.connect();
+    
+    try {
+        await client.query('BEGIN');
+        const reg = await client.query(`SELECT * FROM ${tabla} WHERE id = $1`, [id]);
+        if (reg.rows.length === 0) throw new Error('Registro no encontrado');
+        const mov = reg.rows[0];
+
+        if (tabla === 'entradas') {
+            if (parseFloat(mov.cantidad) > parseFloat(mov.stock_restante)) throw new Error('Este lote ya fue consumido parcialmente.');
+            await client.query('UPDATE productos SET stock_actual = stock_actual - $1 WHERE id = $2', [mov.cantidad, mov.producto_id]);
+        }
+        if (tabla === 'salidas') await restaurarStock(client, mov.producto_id, mov.cantidad);
+        
+        await client.query('INSERT INTO logs_auditoria (usuario_id, accion, tabla_afectada, registro_id, detalles) VALUES ($1, $2, $3, $4, $5)', [req.user.id, 'BORRADO', tabla, id, JSON.stringify({ ...mov, motivo: motivo || 'N/A' })]);
+        await client.query(`DELETE FROM ${tabla} WHERE id = $1`, [id]);
+        await client.query('COMMIT'); res.status(200).json({ mensaje: 'Eliminado con éxito' });
     } catch (error) { await client.query('ROLLBACK'); res.status(400).json({ error: error.message }); } finally { client.release(); }
 });
 
@@ -672,17 +721,19 @@ app.get('/api/reporte/descargar-stock', verificarToken, async (req, res) => {
 // ==========================================
 // LOGS DE AUDITORÍA DEL SISTEMA
 // ==========================================
-// ==========================================
-// LOGS DE AUDITORÍA DEL SISTEMA
-// ==========================================
 app.get('/api/reporte/logs', verificarToken, verificarRol(['Master', 'Administrador']), async (req, res) => {
     try {
-        const query = `SELECT l.id, l.accion, l.tabla_afectada, l.registro_id, l.detalles, l.fecha, u.nombre AS admin, u.nombre AS admin_nombre 
+        // Asignamos el nombre del responsable a todas las variables posibles para evitar el "undefined" en el frontend
+        const query = `SELECT l.id, l.accion, l.tabla_afectada, l.registro_id, l.detalles, l.fecha, 
+                              u.nombre AS admin, 
+                              u.nombre AS admin_nombre, 
+                              u.nombre AS usuario, 
+                              u.nombre AS usuario_nombre 
                        FROM logs_auditoria l 
                        LEFT JOIN usuarios u ON l.usuario_id = u.id 
                        ORDER BY l.fecha DESC LIMIT 100`;
         const resultado = await pool.query(query);
-        res.json(resultado.rows);
+        res.status(200).json(resultado.rows);
     } catch (error) { 
         console.error("Error al consultar logs:", error);
         res.status(500).json({ error: 'Error al consultar logs de auditoría' }); 

@@ -364,10 +364,7 @@ app.put('/api/costeo/lotes/:id', verificarToken, verificarRol(['Master', 'Admini
 app.put('/api/admin/movimientos/:tipo/:id', verificarToken, verificarRol(['Master', 'Administrador']), async (req, res) => {
     const { tipo, id } = req.params; 
     
-    // BLINDAJE EXTREMO: Capturamos el valor sin importar cómo lo llame el frontend
     let rawCantidad = req.body.nueva_cantidad ?? req.body.cantidad ?? req.body.cantidad_nueva;
-    
-    // Reemplazamos coma por punto para procesar los decimales en español
     const nueva_cantidad = parseFloat(String(rawCantidad).replace(',', '.'));
     
     if (isNaN(nueva_cantidad)) {
@@ -384,7 +381,6 @@ app.put('/api/admin/movimientos/:tipo/:id', verificarToken, verificarRol(['Maste
         if (reg.rows.length === 0) throw new Error('Registro no encontrado en la base de datos');
         
         const mov = reg.rows[0]; 
-        // Nos aseguramos de que los valores numéricos de la BD no sean nulos
         const cantOriginal = parseFloat(mov.cantidad) || 0;
         const diferencia = nueva_cantidad - cantOriginal;
 
@@ -395,8 +391,13 @@ app.put('/api/admin/movimientos/:tipo/:id', verificarToken, verificarRol(['Maste
             if (nueva_cantidad < consumido) {
                 throw new Error(`Este lote ya tiene consumido ${consumido}. No puedes reducirlo a un valor menor.`);
             }
-            await client.query('UPDATE entradas SET cantidad = $1, stock_restante = $1 - $2 WHERE id = $3', [nueva_cantidad, consumido, id]);
-            await client.query('UPDATE productos SET stock_actual = stock_actual + $1 WHERE id = $2', [diferencia, mov.producto_id]);
+            
+            // 🔥 SOLUCIÓN AQUÍ: Calculamos el nuevo stock restante en JavaScript
+            const nuevo_stock_restante = nueva_cantidad - consumido;
+
+            // Le enviamos a la BD los números exactos y usamos ::numeric por si acaso en el stock_actual
+            await client.query('UPDATE entradas SET cantidad = $1, stock_restante = $2 WHERE id = $3', [nueva_cantidad, nuevo_stock_restante, id]);
+            await client.query('UPDATE productos SET stock_actual = stock_actual + $1::numeric WHERE id = $2', [diferencia, mov.producto_id]);
         } else {
             if (diferencia > 0) await descontarStock(client, mov.producto_id, diferencia);
             else if (diferencia < 0) await restaurarStock(client, mov.producto_id, Math.abs(diferencia));

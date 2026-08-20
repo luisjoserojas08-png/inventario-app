@@ -5,76 +5,205 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ERP - Dashboard de Inventario</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>tailwind.config={theme:{extend:{colors:{corporate:{dark:'#0f172a',primary:'#1e40af',light:'#f8fafc',border:'#e2e8f0'}}}}}</script>
+    <script>
+      tailwind.config = { theme: { extend: { colors: { corporate: { dark: '#0f172a', primary: '#1e40af', light: '#f8fafc', border: '#e2e8f0' } } } } }
+    </script>
 </head>
-<body class="bg-corporate-light font-sans text-slate-800 subpixel-antialiased">
+<body class="bg-corporate-light font-sans text-slate-800">
+
   <script>
     const token = localStorage.getItem('erp_token') || localStorage.getItem('token');
     if (!token) window.location.href = 'login.html';
-    function parseJwt(t) { try { return JSON.parse(atob(t.split('.')[1])); } catch (e) { return null; } }
-    const currentUser = parseJwt(token);
   </script>
 
   <div class="flex h-screen overflow-hidden">
-   <aside class="w-64 bg-corporate-dark text-slate-300 flex flex-col hidden md:flex">
+    <!-- Sidebar -->
+    <aside class="w-64 bg-corporate-dark text-slate-300 flex flex-col hidden md:flex shrink-0">
       <div class="p-6 text-xl font-bold text-white tracking-wider border-b border-slate-800">ERP Genética</div>
-                 <nav class="flex-1 p-4 space-y-2 overflow-y-auto">
-        <a href="index.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📊 Dashboard Inventario</a>
-        <a href="costeo.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">💰 Costeo de Existencias</a>
+      <nav class="flex-1 p-4 space-y-2 overflow-y-auto">
+        <a href="index.html" class="block px-4 py-2.5 rounded-lg bg-corporate-primary text-white font-medium shadow-xs">📊 Dashboard Inventario</a>
+        <a href="costeo.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">💰 Costeo de Existencias</a>
         <a href="productos.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📦 Maestro de Productos</a>
         <a href="entradas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📥 Registro de Compras</a>
         <a href="salidas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📤 Registro de Salidas</a>
         <a href="reportes.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📑 Historial y Reportes</a>
         <a href="categorias.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🏷️ Categorías y Almacén</a>
         <a href="carga.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📂 Carga Masiva</a>
-        <a href="usuarios.html" class="master-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">👥 Gestión de Usuarios</a>
-        <a href="auditoria.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🛡️ Auditoría del Sistema</a>
+        <a href="usuarios.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">👥 Gestión de Usuarios</a>
+        <a href="auditoria.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🛡️ Auditoría del Sistema</a>
       </nav>
-      <div class="p-4 border-t border-slate-800 text-xs text-slate-500">Sesión Activa • Neon DB</div>
+      <div class="p-4 border-t border-slate-800 text-xs text-slate-500">Sesión Activa</div>
     </aside>
 
+    <!-- Main -->
     <div class="flex-1 flex flex-col overflow-y-auto">
-      <header class="bg-white border-b h-16 flex items-center justify-between px-8 shadow-xs">
-        <h1 class="text-lg font-semibold text-slate-700">Panel General de Existencias</h1>
-        <button onclick="localStorage.clear(); window.location.href='login.html'" class="text-sm text-red-600 font-medium bg-red-50 px-3 py-1.5 rounded-lg">Cerrar Sesión</button>
+      <header class="bg-white border-b h-16 flex items-center justify-between px-8 shadow-xs shrink-0">
+        <h1 class="text-lg font-semibold text-slate-700">Dashboard General de Inventario</h1>
+        <button onclick="localStorage.clear(); window.location.href='login.html'" class="text-sm text-red-600 font-medium bg-red-50 px-3 py-1.5 rounded-lg hover:bg-red-100 transition">Cerrar Sesión</button>
       </header>
 
       <main class="p-8">
-        <div class="bg-white rounded-xl border border-corporate-border shadow-xs overflow-hidden">
-          <div class="px-6 py-4 border-b border-corporate-border bg-slate-50 flex justify-between items-center">
-            <h3 class="font-bold text-slate-700">Inventario Actualizado por Lotes</h3>
-            <button onclick="cargarInventario()" class="bg-corporate-primary text-white px-4 py-2 rounded-lg text-sm font-medium">Actualizar Datos</button>
+        <!-- Indicadores (KPIs) -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          <div class="bg-white p-6 rounded-xl border border-corporate-border shadow-xs flex items-center justify-between">
+            <div>
+              <p class="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-1">Lotes Activos (Con Stock)</p>
+              <h2 id="card-items" class="text-3xl font-bold text-slate-800">0</h2>
+            </div>
+            <div class="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 text-xl">📦</div>
           </div>
-          <table class="w-full text-left border-collapse">
-            <thead>
-              <tr class="bg-slate-50 text-slate-500 text-xs uppercase border-b">
-                <th class="px-6 py-3">SKU</th><th class="px-6 py-3">Producto</th><th class="px-6 py-3">Almacén</th>
-                <th class="px-6 py-3">Lote ID</th><th class="px-6 py-3">Stock Restante</th><th class="px-6 py-3">Costo Unitario ($)</th>
-              </tr>
-            </thead>
-            <tbody id="tabla-inventario" class="divide-y text-sm text-slate-600"></tbody>
-          </table>
+          <div class="bg-white p-6 rounded-xl border border-corporate-border shadow-xs flex items-center justify-between">
+            <div>
+              <p class="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-1">Valorización Total (Filtro Actual)</p>
+              <h2 id="card-valor" class="text-3xl font-bold text-emerald-600">$0.00</h2>
+            </div>
+            <div class="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 text-xl">💰</div>
+          </div>
         </div>
+
+        <!-- Panel de Filtros Analíticos -->
+        <div class="bg-white p-5 rounded-xl border border-corporate-border shadow-xs mb-6">
+            <h3 class="font-bold text-slate-700 border-b pb-3 mb-4">Filtros de Análisis Cruzado</h3>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">Filtro Almacén</label>
+                    <select id="filtro-almacen" class="w-full border rounded-md px-3 py-2.5 text-sm bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none transition">
+                        <option value="">Todos los Almacenes</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">Filtro Categoría</label>
+                    <select id="filtro-categoria" class="w-full border rounded-md px-3 py-2.5 text-sm bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none transition">
+                        <option value="">Todas las Categorías</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">Filtro Producto</label>
+                    <select id="filtro-producto" class="w-full border rounded-md px-3 py-2.5 text-sm bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none transition">
+                        <option value="">Todos los Productos</option>
+                    </select>
+                </div>
+                <div>
+                    <button onclick="cargarDashboard()" class="w-full bg-corporate-primary text-white px-6 py-2.5 rounded-md text-sm hover:bg-blue-800 shadow-xs font-medium transition flex items-center justify-center gap-2">
+                        🔍 Aplicar Filtros
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabla de Lotes Físicos -->
+        <div class="bg-white rounded-xl border border-corporate-border shadow-xs overflow-hidden">
+          <div class="px-6 py-4 border-b bg-slate-50"><h3 class="font-bold text-slate-700">Existencias Actuales (Método FIFO)</h3></div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left">
+              <thead>
+                <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b">
+                  <th class="px-6 py-3">Lote ID</th>
+                  <th class="px-6 py-3">Producto / SKU</th>
+                  <th class="px-6 py-3">Categoría</th>
+                  <th class="px-6 py-3">Almacén</th>
+                  <th class="px-6 py-3 text-right">Stock Disponible</th>
+                  <th class="px-6 py-3 text-right">Costo Unit.</th>
+                  <th class="px-6 py-3 text-right">Valor Total</th>
+                </tr>
+              </thead>
+              <tbody id="tabla-inventario" class="divide-y text-sm text-slate-600">
+                <tr><td colspan="7" class="px-6 py-6 text-center text-slate-400">Cargando información del almacén...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
       </main>
     </div>
   </div>
 
   <script>
-    if (currentUser && currentUser.rol !== 'Administrador') document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
-    async function cargarInventario() {
-      const res = await fetch('/api/inventario-lotes', { headers: { 'Authorization': `Bearer ${token}` } });
-      const datos = await res.json();
-      document.getElementById('tabla-inventario').innerHTML = datos.map(item => `
-        <tr class="hover:bg-slate-50 transition">
-          <td class="px-6 py-4 font-medium text-slate-800">${item.sku}</td>
-          <td class="px-6 py-4">${item.nombre} <br><span class="text-xs text-slate-400">${item.categoria_nombre}</span></td>
-          <td class="px-6 py-4 font-semibold text-blue-700">${item.almacen}</td>
-          <td class="px-6 py-4 font-mono font-medium">LOT-${String(item.lote_id).padStart(3, '0')}</td>
-          <td class="px-6 py-4 font-bold text-emerald-600">${Number(item.stock_restante).toFixed(2)} ${item.unidad_medida}</td>
-          <td class="px-6 py-4">$${Number(item.costo_unitario).toFixed(2)}</td>
-        </tr>`).join('');
+    async function cargarFiltrosListas() {
+        try {
+            const reqOpciones = { headers: { 'Authorization': `Bearer ${token}` } };
+            const [almRes, catRes, prodRes] = await Promise.all([
+                fetch('/api/almacenes', reqOpciones),
+                fetch('/api/categorias', reqOpciones),
+                fetch('/api/productos', reqOpciones)
+            ]);
+            
+            const almacenes = await almRes.json();
+            const categorias = await catRes.json();
+            const productos = await prodRes.json();
+
+            const selAlm = document.getElementById('filtro-almacen');
+            if (selAlm && Array.isArray(almacenes)) {
+                almacenes.forEach(a => selAlm.innerHTML += `<option value="${a.nombre}">${a.nombre}</option>`);
+            }
+            
+            const selCat = document.getElementById('filtro-categoria');
+            if (selCat && Array.isArray(categorias)) {
+                categorias.forEach(c => selCat.innerHTML += `<option value="${c.id}">${c.nombre}</option>`);
+            }
+
+            const selProd = document.getElementById('filtro-producto');
+            if (selProd && Array.isArray(productos)) {
+                productos.forEach(p => selProd.innerHTML += `<option value="${p.id}">${p.nombre} (SKU: ${p.sku})</option>`);
+            }
+        } catch (error) { console.error("Error cargando filtros:", error); }
     }
-    cargarInventario();
+
+    async function cargarDashboard() {
+        const almacen = document.getElementById('filtro-almacen')?.value || '';
+        const categoria = document.getElementById('filtro-categoria')?.value || '';
+        const producto = document.getElementById('filtro-producto')?.value || '';
+        const tbody = document.getElementById('tabla-inventario');
+
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center py-6 text-slate-400">Consultando existencias...</td></tr>`;
+
+        let url = `/api/inventario-lotes?v=1`;
+        if (almacen) url += `&almacen=${encodeURIComponent(almacen)}`;
+        if (categoria) url += `&categoria=${categoria}`;
+        if (producto) url += `&producto=${producto}`;
+
+        try {
+            const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+            if (!res.ok) throw new Error("Error en el servidor");
+            
+            const lotes = await res.json();
+
+            // Llenar la tabla
+            if (lotes.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-slate-500 font-medium">No se encontraron lotes activos con los filtros seleccionados.</td></tr>`;
+            } else {
+                tbody.innerHTML = lotes.map(l => `
+                    <tr class="hover:bg-slate-50 transition">
+                        <td class="px-6 py-4 font-mono font-bold text-blue-600 whitespace-nowrap">LOT-${String(l.lote_id).padStart(3, '0')}</td>
+                        <td class="px-6 py-4">
+                            <p class="font-medium text-slate-800">${l.nombre}</p>
+                            <p class="text-xs text-slate-400">SKU: ${l.sku}</p>
+                        </td>
+                        <td class="px-6 py-4 text-slate-500">${l.categoria_nombre || 'S/N'}</td>
+                        <td class="px-6 py-4 text-slate-500 whitespace-nowrap"><span class="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full text-xs font-medium border">${l.almacen || 'Principal'}</span></td>
+                        <td class="px-6 py-4 font-bold text-emerald-600 text-right whitespace-nowrap">${Number(l.stock_restante).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} <span class="text-xs font-normal">${l.unidad_medida}</span></td>
+                        <td class="px-6 py-4 text-slate-600 text-right whitespace-nowrap">$${Number(l.costo_unitario).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        <td class="px-6 py-4 font-bold text-slate-800 text-right whitespace-nowrap">$${(Number(l.stock_restante) * Number(l.costo_unitario)).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                    </tr>
+                `).join('');
+            }
+
+            // Recalcular los KPIs superiores basándose en los datos filtrados
+            const totalItems = lotes.length;
+            const totalValorizado = lotes.reduce((sum, l) => sum + (Number(l.stock_restante) * Number(l.costo_unitario)), 0);
+            
+            document.getElementById('card-items').innerText = totalItems;
+            document.getElementById('card-valor').innerText = `$${totalValorizado.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
+        } catch (error) { 
+            console.error(error);
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-red-500">Error de conexión al cargar el dashboard.</td></tr>`;
+        }
+    }
+
+    // Inicializar la pantalla
+    cargarFiltrosListas();
+    cargarDashboard();
   </script>
 </body>
 </html>

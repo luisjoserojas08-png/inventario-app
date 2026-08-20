@@ -411,14 +411,17 @@ app.delete('/api/admin/movimientos/:tipo/:id', verificarToken, verificarRol(['Ma
 });
 
 // ==========================================
-// EXCEL DE REPORTES (CON FORMATO CONTABLE)
+// EXCEL DE REPORTES (CON SEGURIDAD POR ROL)
 // ==========================================
 app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => {
-    // 1. Agregamos centro_costo a los parámetros recibidos
     const { tipo, inicio, fin, centro_costo } = req.query; 
     try {
-        const userQuery = await pool.query('SELECT nombre FROM usuarios WHERE id = $1', [req.user.id]);
+        const userQuery = await pool.query('SELECT nombre, rol FROM usuarios WHERE id = $1', [req.user.id]);
         const userName = userQuery.rows.length > 0 ? userQuery.rows[0].nombre : 'Usuario Sistema';
+        const userRol = userQuery.rows.length > 0 ? userQuery.rows[0].rol : 'Operario';
+        
+        // VALIDACIÓN DE ROL: Solo Master y Administrador ven costos
+        const puedeVerCostos = ['Master', 'Administrador'].includes(userRol);
 
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet(`Reporte de ${tipo.toUpperCase()}`);
@@ -427,110 +430,61 @@ app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => 
         const fechaInicio = inicio ? new Date(inicio + 'T00:00:00') : new Date('2000-01-01'); 
         const fechaFin = fin ? new Date(`${fin}T23:59:59.999Z`) : new Date();
 
-        // 2. Preparamos los parámetros dinámicos para la consulta SQL
-        let params = [fechaInicio, fechaFin];
-        let paramIndex = 3;
+        let params = [fechaInicio, fechaFin]; let paramIndex = 3;
 
-        let fechaInicioStr = 'INICIO';
-        let fechaFinStr = 'ACTUALIDAD';
-        if (inicio) { const [y, m, d] = inicio.split('-'); fechaInicioStr = `${d}/${m}/${y}`; }
-        if (fin) { const [y, m, d] = fin.split('-'); fechaFinStr = `${d}/${m}/${y}`; }
+        // Armamos las columnas base (sin dinero)
+        let cols = [ 
+            { header: tipo === 'entradas' ? 'Lote' : 'Salida', key: 'id_lote', width: 12 }, 
+            { header: 'SKU', key: 'sku', width: 15 }, 
+            { header: 'Producto', key: 'producto_nombre', width: 35 }, 
+            { header: 'Cant.', key: 'cantidad', width: 15 }
+        ];
+
+        // Si tiene permiso, agregamos las columnas financieras
+        if (puedeVerCostos) {
+            cols.push({ header: 'Costo Unit.', key: 'costo_unitario', width: 15 }, { header: 'Costo Total ($)', key: 'costo_total', width: 18 });
+        }
 
         if (tipo === 'entradas') {
-            worksheet.columns = [ 
-                { header: 'Lote', key: 'id_lote', width: 12 }, { header: 'SKU', key: 'sku', width: 15 }, 
-                { header: 'Producto', key: 'producto_nombre', width: 35 }, { header: 'Cant.', key: 'cantidad', width: 15 }, 
-                { header: 'Costo Unit.', key: 'costo_unitario', width: 15 }, { header: 'Costo Total ($)', key: 'costo_total', width: 18 },
-                { header: 'Doc.', key: 'nro_documento', width: 15 }, { header: 'Usuario', key: 'usuario_nombre', width: 20 }, { header: 'Fecha', key: 'fecha', width: 22 } 
-            ];
+            cols.push({ header: 'Doc.', key: 'nro_documento', width: 15 }, { header: 'Usuario', key: 'usuario_nombre', width: 20 }, { header: 'Fecha', key: 'fecha', width: 22 });
             query = `SELECT e.id, p.sku, p.nombre AS producto_nombre, e.cantidad, e.costo_unitario, e.nro_documento, e.fecha, u.nombre AS usuario_nombre 
                      FROM entradas e JOIN productos p ON e.producto_id = p.id LEFT JOIN usuarios u ON e.usuario_id = u.id 
                      WHERE e.fecha >= $1 AND e.fecha <= $2 ORDER BY e.fecha DESC`;
         } else {
-            // 3. Agregamos la columna y el cruce (JOIN) del Centro de Costo para las Salidas
-            worksheet.columns = [ 
-                { header: 'Salida', key: 'id_lote', width: 12 }, { header: 'SKU', key: 'sku', width: 15 }, 
-                { header: 'Producto', key: 'producto_nombre', width: 35 }, { header: 'Cant.', key: 'cantidad', width: 15 }, 
-                { header: 'Costo Unit.', key: 'costo_unitario', width: 15 }, { header: 'Costo Total ($)', key: 'costo_total', width: 18 },
-                { header: 'Centro de Costo', key: 'centro_costo_nombre', width: 25 },
-                { header: 'Concepto', key: 'concepto', width: 35 }, { header: 'Usuario', key: 'usuario_nombre', width: 20 }, { header: 'Fecha', key: 'fecha', width: 22 } 
-            ];
+            cols.push({ header: 'Centro de Costo', key: 'centro_costo_nombre', width: 25 }, { header: 'Concepto', key: 'concepto', width: 35 }, { header: 'Usuario', key: 'usuario_nombre', width: 20 }, { header: 'Fecha', key: 'fecha', width: 22 });
             query = `SELECT s.id, p.sku, p.nombre AS producto_nombre, s.cantidad, s.concepto, s.fecha, u.nombre AS usuario_nombre, e.costo_unitario, cc.nombre AS centro_costo_nombre 
-                     FROM salidas s JOIN productos p ON s.producto_id = p.id 
-                     LEFT JOIN entradas e ON s.lote_origen_id = e.id 
-                     LEFT JOIN usuarios u ON s.usuario_id = u.id 
-                     LEFT JOIN centros_costo cc ON s.centro_costo_id = cc.id 
+                     FROM salidas s JOIN productos p ON s.producto_id = p.id LEFT JOIN entradas e ON s.lote_origen_id = e.id LEFT JOIN usuarios u ON s.usuario_id = u.id LEFT JOIN centros_costo cc ON s.centro_costo_id = cc.id 
                      WHERE s.fecha >= $1 AND s.fecha <= $2`;
-            
-            // 4. Si se envió el filtro de centro de costo, lo agregamos a la consulta
-            if (centro_costo) {
-                query += ` AND s.centro_costo_id = $${paramIndex++}`;
-                params.push(centro_costo);
-            }
+            if (centro_costo) { query += ` AND s.centro_costo_id = $${paramIndex++}`; params.push(centro_costo); }
             query += ` ORDER BY s.fecha DESC`;
         }
 
+        worksheet.columns = cols;
         worksheet.spliceRows(1, 0, [], [], [], []);
-
-        const tituloReporte = `HISTORIAL DE ${tipo.toUpperCase()} (DESDE ${fechaInicioStr} HASTA ${fechaFinStr})`;
-        const subtitulo = tipo === 'entradas' 
-            ? 'Imputación contable de ingresos al almacén y su valorización' 
-            : 'Imputación contable de consumos y salidas de inventario valorizadas';
-
-        worksheet.mergeCells('A1:F1');
-        const titleCell = worksheet.getCell('A1');
-        titleCell.value = tituloReporte;
-        titleCell.font = { size: 13, bold: true, color: { argb: 'FF1E40AF' } };
-        titleCell.alignment = { vertical: 'middle', horizontal: 'left' };
-
-        worksheet.mergeCells('A2:F2');
-        const subCell = worksheet.getCell('A2');
-        subCell.value = subtitulo;
-        subCell.font = { size: 10, italic: true, color: { argb: 'FF475569' } };
-
-        const fechaActual = new Date().toLocaleDateString('es-VE', { timeZone: 'America/Caracas' });
-        const horaActual = new Date().toLocaleTimeString('es-VE', { timeZone: 'America/Caracas', hour12: true });
-
-        worksheet.mergeCells('G1:I1');
-        worksheet.getCell('G1').value = `Fecha de emisión: ${fechaActual} a las ${horaActual}`;
-        worksheet.getCell('G1').alignment = { horizontal: 'right' };
-        worksheet.getCell('G1').font = { size: 9, bold: true };
-
-        worksheet.mergeCells('G2:I2');
-        worksheet.getCell('G2').value = `Generado por: ${userName}`;
-        worksheet.getCell('G2').alignment = { horizontal: 'right' };
-        worksheet.getCell('G2').font = { size: 9 };
+        worksheet.getCell('A1').value = `HISTORIAL DE ${tipo.toUpperCase()}`;
+        worksheet.getCell('A1').font = { size: 13, bold: true, color: { argb: 'FF1E40AF' } };
 
         const headerRow = worksheet.getRow(5);
-        headerRow.eachCell({ includeEmpty: false }, (cell) => {
-            cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } };
-            cell.alignment = { vertical: 'middle', horizontal: 'center' };
-        });
-        worksheet.autoFilter = { from: 'A5', to: 'I5' };
+        headerRow.eachCell({ includeEmpty: false }, (cell) => { cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } }; cell.alignment = { vertical: 'middle', horizontal: 'center' }; });
 
-        // 5. Ejecutamos la consulta usando nuestros parámetros dinámicos
         const resultado = await pool.query(query, params);
 
         resultado.rows.forEach(r => {
-            const cantidad = parseFloat(r.cantidad);
-            const costoUnit = parseFloat(r.costo_unitario) || 0;
-            const costoTotal = (cantidad * costoUnit);
+            let fila = { ...r, id_lote: tipo === 'entradas' ? `LOT-${String(r.id).padStart(3, '0')}` : `SAL-${String(r.id).padStart(3, '0')}`, cantidad: parseFloat(r.cantidad), usuario_nombre: r.usuario_nombre || 'Sistema', fecha: new Date(r.fecha).toLocaleString('es-VE', { timeZone: 'America/Caracas' }) };
             
-            const newRow = worksheet.addRow({ 
-                ...r, 
-                id_lote: tipo === 'entradas' ? `LOT-${String(r.id).padStart(3, '0')}` : `SAL-${String(r.id).padStart(3, '0')}`,
-                cantidad: cantidad,
-                costo_unitario: costoUnit,
-                costo_total: costoTotal,
-                centro_costo_nombre: r.centro_costo_nombre || 'General / Sin Centro', // Llenamos la celda
-                usuario_nombre: r.usuario_nombre || 'Sistema', 
-                fecha: new Date(r.fecha).toLocaleString('es-VE', { timeZone: 'America/Caracas' }) 
-            });
-
+            // Calculamos costos solo si tiene permiso
+            if (puedeVerCostos) {
+                fila.costo_unitario = parseFloat(r.costo_unitario) || 0;
+                fila.costo_total = fila.cantidad * fila.costo_unitario;
+            }
+            if (tipo === 'salidas') fila.centro_costo_nombre = r.centro_costo_nombre || 'General';
+            
+            const newRow = worksheet.addRow(fila);
             newRow.getCell('cantidad').numFmt = '#,##0.00';
-            newRow.getCell('costo_unitario').numFmt = '"$"#,##0.00';
-            newRow.getCell('costo_total').numFmt = '"$"#,##0.00';
+            if (puedeVerCostos) {
+                newRow.getCell('costo_unitario').numFmt = '"$"#,##0.00';
+                newRow.getCell('costo_total').numFmt = '"$"#,##0.00';
+            }
         });
         
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -540,94 +494,52 @@ app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => 
 });
 
 // ==========================================
-// REPORTES HISTÓRICOS (JSON PARA LAS TABLAS CON FILTROS)
+// REPORTES HISTÓRICOS (JSON PARA LAS TABLAS CON FILTROS Y SEGURIDAD)
 // ==========================================
 app.get('/api/reporte/entradas', verificarToken, async (req, res) => {
     const { inicio, fin, producto, categoria, almacen } = req.query;
     let query = `SELECT e.id, p.sku, p.nombre AS producto_nombre, p.unidad_medida, c.almacen, e.cantidad, e.costo_unitario, e.fecha 
-                 FROM entradas e 
-                 JOIN productos p ON e.producto_id = p.id 
-                 LEFT JOIN categorias c ON p.categoria_id = c.id WHERE 1=1`;
-    let params = [];
-    let paramIndex = 1;
+                 FROM entradas e JOIN productos p ON e.producto_id = p.id LEFT JOIN categorias c ON p.categoria_id = c.id WHERE 1=1`;
+    let params = []; let paramIndex = 1;
 
-    if (inicio && fin) {
-        query += ` AND e.fecha >= $${paramIndex++} AND e.fecha <= $${paramIndex++}`;
-        params.push(new Date(inicio), new Date(`${fin}T23:59:59.999Z`));
-    }
-    if (producto) {
-        query += ` AND p.id = $${paramIndex++}`;
-        params.push(producto);
-    }
-    if (categoria) {
-        query += ` AND p.categoria_id = $${paramIndex++}`;
-        params.push(categoria);
-    }
-    if (almacen) {
-        query += ` AND c.almacen = $${paramIndex++}`;
-        params.push(almacen);
-    }
-
+    if (inicio && fin) { query += ` AND e.fecha >= $${paramIndex++} AND e.fecha <= $${paramIndex++}`; params.push(new Date(inicio), new Date(`${fin}T23:59:59.999Z`)); }
+    if (producto) { query += ` AND p.id = $${paramIndex++}`; params.push(producto); }
+    if (categoria) { query += ` AND p.categoria_id = $${paramIndex++}`; params.push(categoria); }
+    if (almacen) { query += ` AND c.almacen = $${paramIndex++}`; params.push(almacen); }
     query += ` ORDER BY e.fecha DESC;`;
     
     try { 
-        res.json((await pool.query(query, params)).rows); 
-    } catch (error) { 
-        res.status(500).json({ error: 'Error al consultar entradas' }); 
-    }
+        let datos = (await pool.query(query, params)).rows;
+        // BLINDAJE: Limpiamos los costos si no es Master ni Administrador
+        if (!['Master', 'Administrador'].includes(req.user.rol)) {
+            datos = datos.map(({ costo_unitario, ...resto }) => resto);
+        }
+        res.json(datos); 
+    } catch (error) { res.status(500).json({ error: 'Error al consultar entradas' }); }
 });
 
 app.get('/api/reporte/salidas', verificarToken, async (req, res) => {
-    // 6. Agregamos centro_costo a los parámetros extraídos
     const { inicio, fin, producto, categoria, almacen, centro_costo } = req.query;
-    let query = `SELECT s.id, p.sku, p.nombre AS producto_nombre, p.unidad_medida, c.almacen, s.cantidad, s.concepto, s.fecha, s.lote_origen_id, cc.nombre AS centro_costo_nombre 
-                 FROM salidas s 
-                 JOIN productos p ON s.producto_id = p.id 
-                 LEFT JOIN categorias c ON p.categoria_id = c.id 
-                 LEFT JOIN centros_costo cc ON s.centro_costo_id = cc.id WHERE 1=1`;
-    let params = [];
-    let paramIndex = 1;
+    let query = `SELECT s.id, p.sku, p.nombre AS producto_nombre, p.unidad_medida, c.almacen, s.cantidad, s.concepto, s.fecha, s.lote_origen_id, cc.nombre AS centro_costo_nombre, e.costo_unitario 
+                 FROM salidas s JOIN productos p ON s.producto_id = p.id LEFT JOIN categorias c ON p.categoria_id = c.id LEFT JOIN centros_costo cc ON s.centro_costo_id = cc.id LEFT JOIN entradas e ON s.lote_origen_id = e.id WHERE 1=1`;
+    let params = []; let paramIndex = 1;
 
-    if (inicio && fin) {
-        query += ` AND s.fecha >= $${paramIndex++} AND s.fecha <= $${paramIndex++}`;
-        params.push(new Date(inicio), new Date(`${fin}T23:59:59.999Z`));
-    }
-    if (producto) {
-        query += ` AND p.id = $${paramIndex++}`;
-        params.push(producto);
-    }
-    if (categoria) {
-        query += ` AND p.categoria_id = $${paramIndex++}`;
-        params.push(categoria);
-    }
-    if (almacen) {
-        query += ` AND c.almacen = $${paramIndex++}`;
-        params.push(almacen);
-    }
-    // 7. Filtro lógico para Centro de Costo en JSON
-    if (centro_costo) {
-        query += ` AND s.centro_costo_id = $${paramIndex++}`;
-        params.push(centro_costo);
-    }
-
+    if (inicio && fin) { query += ` AND s.fecha >= $${paramIndex++} AND s.fecha <= $${paramIndex++}`; params.push(new Date(inicio), new Date(`${fin}T23:59:59.999Z`)); }
+    if (producto) { query += ` AND p.id = $${paramIndex++}`; params.push(producto); }
+    if (categoria) { query += ` AND p.categoria_id = $${paramIndex++}`; params.push(categoria); }
+    if (almacen) { query += ` AND c.almacen = $${paramIndex++}`; params.push(almacen); }
+    if (centro_costo) { query += ` AND s.centro_costo_id = $${paramIndex++}`; params.push(centro_costo); }
     query += ` ORDER BY s.fecha DESC;`;
     
     try { 
-        res.json((await pool.query(query, params)).rows); 
-    } catch (error) { 
-        res.status(500).json({ error: 'Error al consultar salidas' }); 
-    }
+        let datos = (await pool.query(query, params)).rows;
+        // BLINDAJE: Limpiamos los costos si no es Master ni Administrador
+        if (!['Master', 'Administrador'].includes(req.user.rol)) {
+            datos = datos.map(({ costo_unitario, ...resto }) => resto);
+        }
+        res.json(datos); 
+    } catch (error) { res.status(500).json({ error: 'Error al consultar salidas' }); }
 });
-
-app.get('/api/reporte/logs', verificarToken, verificarRol(['Master', 'Administrador']), async (req, res) => {
-    try { 
-        const query = 'SELECT l.*, u.nombre AS usuario_nombre FROM logs_auditoria l JOIN usuarios u ON l.usuario_id = u.id ORDER BY l.fecha DESC LIMIT 100';
-        res.json((await pool.query(query)).rows); 
-    } catch (error) { 
-        res.status(500).json({ error: 'Error al consultar auditoría' }); 
-    }
-});
-
 
 // ==========================================
 // CARGA MASIVA EXCEL (CON SOPORTE DE FECHAS)

@@ -11,9 +11,84 @@
 </head>
 <body class="bg-corporate-light font-sans text-slate-800">
 
-  <script>
+ <script>
     const token = localStorage.getItem('erp_token') || localStorage.getItem('token');
     if (!token) window.location.href = 'login.html';
+    function parseJwt(t) { try { return JSON.parse(atob(t.split('.')[1])); } catch (e) { return null; } }
+    
+    const currentUser = parseJwt(token);
+    // Evaluamos el permiso basados puramente en el ROL del token
+    const puedeVerCostos = currentUser && ['Master', 'Administrador'].includes(currentUser.rol);
+
+    document.addEventListener("DOMContentLoaded", () => {
+        if (!puedeVerCostos) {
+            // Ocultar tarjetas financieras y menú de costeo
+            document.querySelectorAll('.costos-only').forEach(el => el.classList.add('hidden'));
+        }
+        if (currentUser && currentUser.rol !== 'Master') {
+            document.querySelectorAll('.master-only').forEach(el => el.classList.add('hidden'));
+        }
+        
+        // Inyectamos las cabeceras de dinero en la tabla FIFO solo si tiene permiso
+        if (puedeVerCostos) {
+            document.getElementById('tabla-head').innerHTML += `<th class="px-6 py-3 text-right">Costo Unit.</th><th class="px-6 py-3 text-right">Valor Total ($)</th>`;
+        }
+    });
+
+    async function cargarFiltros() {
+        const headers = { headers: { 'Authorization': `Bearer ${token}` } };
+        try {
+            const [alm, cat, prod] = await Promise.all([
+                fetch('/api/almacenes', headers).then(r=>r.json()), fetch('/api/categorias', headers).then(r=>r.json()), fetch('/api/productos', headers).then(r=>r.json())
+            ]);
+            document.getElementById('filtro-almacen').innerHTML += alm.map(a => `<option value="${a.nombre}">${a.nombre}</option>`).join('');
+            document.getElementById('filtro-categoria').innerHTML += cat.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
+            document.getElementById('filtro-producto').innerHTML += prod.map(p => `<option value="${p.id}">${p.nombre} (SKU: ${p.sku})</option>`).join('');
+        } catch (e) { console.error("Error filtros", e); }
+    }
+
+    async function cargarDashboard() {
+        const almacen = document.getElementById('filtro-almacen').value;
+        const categoria = document.getElementById('filtro-categoria').value;
+        const producto = document.getElementById('filtro-producto').value;
+        let url = '/api/inventario-lotes?v=1';
+        if(almacen) url += `&almacen=${encodeURIComponent(almacen)}`; if(categoria) url += `&categoria=${categoria}`; if(producto) url += `&producto=${producto}`;
+
+        try {
+            const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+            if (!res.ok) throw new Error("Token inválido");
+            const lotes = await res.json();
+            
+            let html = ''; let valTotal = 0;
+            if (lotes.length === 0) {
+                html = `<tr><td colspan="${puedeVerCostos ? 7 : 5}" class="px-6 py-8 text-center text-slate-500">No hay lotes disponibles.</td></tr>`;
+            } else {
+                lotes.forEach(l => {
+                    const cant = parseFloat(l.stock_restante);
+                    html += `<tr class="hover:bg-slate-50 transition">
+                        <td class="px-6 py-4 font-mono font-bold text-blue-600">LOT-${String(l.lote_id).padStart(3, '0')}</td>
+                        <td class="px-6 py-4"><p class="font-bold text-slate-800">${l.nombre}</p><p class="text-xs text-slate-400">SKU: ${l.sku}</p></td>
+                        <td class="px-6 py-4 text-slate-500">${l.categoria_nombre || 'N/A'}</td>
+                        <td class="px-6 py-4"><span class="bg-slate-100 px-2 py-1 rounded text-xs border">${l.almacen || 'Principal'}</span></td>
+                        <td class="px-6 py-4 font-extrabold text-emerald-600 text-right">${cant.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} <span class="text-xs text-slate-400">${l.unidad_medida}</span></td>`;
+                    
+                    if (puedeVerCostos) {
+                        const costo = parseFloat(l.costo_unitario) || 0;
+                        const totalLinea = cant * costo;
+                        valTotal += totalLinea;
+                        html += `<td class="px-6 py-4 text-slate-600 text-right">$${costo.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                                 <td class="px-6 py-4 font-bold text-slate-800 text-right">$${totalLinea.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>`;
+                    }
+                    html += `</tr>`;
+                });
+            }
+            document.getElementById('tabla-dashboard').innerHTML = html;
+            document.getElementById('total-lotes').innerText = lotes.length;
+            if (puedeVerCostos) document.getElementById('total-valor').innerText = `$${valTotal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        } catch (e) { document.getElementById('tabla-dashboard').innerHTML = `<tr><td colspan="7" class="text-center text-red-500">Error al cargar.</td></tr>`; }
+    }
+    cargarFiltros();
+    cargarDashboard();
   </script>
 
   <div class="flex h-screen overflow-hidden">

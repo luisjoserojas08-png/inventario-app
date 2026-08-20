@@ -158,6 +158,10 @@
     }
 
     async function cargarReporte() {
+        // Obtenemos rol del token (agregado al principio del archivo)
+        const currentUser = parseJwt(token);
+        const puedeVerCostos = currentUser && ['Master', 'Administrador'].includes(currentUser.rol);
+
         const inicio = document.getElementById('filtro-inicio').value;
         const fin = document.getElementById('filtro-fin').value;
         const almacen = document.getElementById('filtro-almacen').value;
@@ -168,15 +172,12 @@
         const headers = document.getElementById('tabla-headers');
         const titulo = document.getElementById('titulo-tabla');
 
-        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-6 text-slate-400">Consultando registros...</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center py-6 text-slate-400">Consultando registros...</td></tr>`;
 
         let url = `/api/reporte/${tipoActual}?v=1`;
-        if (inicio) url += `&inicio=${inicio}`;
-        if (fin) url += `&fin=${fin}`;
-        if (almacen) url += `&almacen=${encodeURIComponent(almacen)}`;
-        if (categoria) url += `&categoria=${categoria}`;
-        if (producto) url += `&producto=${producto}`;
-        if (tipoActual === 'salidas' && centro) url += `&centro_costo=${centro}`;
+        if (inicio) url += `&inicio=${inicio}`; if (fin) url += `&fin=${fin}`;
+        if (almacen) url += `&almacen=${encodeURIComponent(almacen)}`; if (categoria) url += `&categoria=${categoria}`;
+        if (producto) url += `&producto=${producto}`; if (tipoActual === 'salidas' && centro) url += `&centro_costo=${centro}`;
 
         try {
             const res = await fetch(url, headersConfig);
@@ -184,52 +185,35 @@
 
             if (tipoActual === 'entradas') {
                 titulo.innerText = "Movimientos de Entradas";
-                headers.innerHTML = `
-                    <th class="px-6 py-3">Lote ID</th>
-                    <th class="px-6 py-3">Producto / SKU</th>
-                    <th class="px-6 py-3">Almacén</th>
-                    <th class="px-6 py-3 text-right">Cantidad</th>
-                    <th class="px-6 py-3 text-right">Costo Unit.</th>
-                    <th class="px-6 py-3">Fecha</th>
-                `;
-                if (!datos.length) {
-                    tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-slate-500">No se encontraron entradas con los filtros seleccionados.</td></tr>`;
-                    return;
-                }
+                headers.innerHTML = `<th class="px-6 py-3">Lote ID</th><th class="px-6 py-3">Producto / SKU</th><th class="px-6 py-3">Almacén</th><th class="px-6 py-3 text-right">Cantidad</th>
+                    ${puedeVerCostos ? '<th class="px-6 py-3 text-right">Costo Unit.</th>' : ''} <th class="px-6 py-3">Fecha</th>`;
+                
+                if (!datos.length) { tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-slate-500">No se encontraron entradas.</td></tr>`; return; }
                 tbody.innerHTML = datos.map(d => `
                     <tr class="hover:bg-slate-50">
                         <td class="px-6 py-4 font-mono font-bold text-blue-600">LOT-${String(d.id).padStart(3, '0')}</td>
                         <td class="px-6 py-4"><p class="font-medium text-slate-800">${d.producto_nombre}</p><p class="text-xs text-slate-400">SKU: ${d.sku}</p></td>
                         <td class="px-6 py-4"><span class="bg-slate-100 px-2.5 py-1 rounded-full text-xs border">${d.almacen || 'Principal'}</span></td>
                         <td class="px-6 py-4 font-bold text-emerald-600 text-right">${Number(d.cantidad).toFixed(2)} ${d.unidad_medida}</td>
-                        <td class="px-6 py-4 text-slate-600 text-right">$${Number(d.costo_unitario).toFixed(2)}</td>
+                        ${puedeVerCostos && d.costo_unitario !== undefined ? `<td class="px-6 py-4 text-slate-600 text-right">$${Number(d.costo_unitario).toFixed(2)}</td>` : ''}
                         <td class="px-6 py-4 text-slate-500">${new Date(d.fecha).toLocaleString('es-VE')}</td>
-                    </tr>
-                `).join('');
+                    </tr>`).join('');
             } else {
                 titulo.innerText = "Historial de Salidas y Consumos";
-                headers.innerHTML = `
-                    <th class="px-6 py-3">Salida ID</th>
-                    <th class="px-6 py-3">Producto / SKU</th>
-                    <th class="px-6 py-3">Centro de Costo</th>
-                    <th class="px-6 py-3 text-right">Cantidad</th>
-                    <th class="px-6 py-3">Concepto</th>
-                    <th class="px-6 py-3">Fecha</th>
-                `;
-                if (!datos.length) {
-                    tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-slate-500">No se encontraron salidas con los filtros seleccionados.</td></tr>`;
-                    return;
-                }
+                headers.innerHTML = `<th class="px-6 py-3">Salida ID</th><th class="px-6 py-3">Producto / SKU</th><th class="px-6 py-3">Centro de Costo</th><th class="px-6 py-3 text-right">Cantidad</th>
+                    ${puedeVerCostos ? '<th class="px-6 py-3 text-right">Costo Unit.</th>' : ''} <th class="px-6 py-3">Concepto</th><th class="px-6 py-3">Fecha</th>`;
+                
+                if (!datos.length) { tbody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-slate-500">No se encontraron salidas.</td></tr>`; return; }
                 tbody.innerHTML = datos.map(d => `
                     <tr class="hover:bg-slate-50">
                         <td class="px-6 py-4 font-mono font-bold text-orange-600">SAL-${String(d.id).padStart(3, '0')}</td>
                         <td class="px-6 py-4"><p class="font-medium text-slate-800">${d.producto_nombre}</p><p class="text-xs text-slate-400">SKU: ${d.sku}</p></td>
                         <td class="px-6 py-4"><span class="bg-orange-50 text-orange-700 px-2.5 py-1 rounded-full text-xs font-medium border border-orange-200">${d.centro_costo_nombre || 'General'}</span></td>
                         <td class="px-6 py-4 font-bold text-red-600 text-right">-${Number(d.cantidad).toFixed(2)} ${d.unidad_medida}</td>
+                        ${puedeVerCostos && d.costo_unitario !== undefined ? `<td class="px-6 py-4 text-slate-600 text-right">$${Number(d.costo_unitario).toFixed(2)}</td>` : ''}
                         <td class="px-6 py-4 text-slate-600">${d.concepto || 'S/N'}</td>
                         <td class="px-6 py-4 text-slate-500">${new Date(d.fecha).toLocaleString('es-VE')}</td>
-                    </tr>
-                `).join('');
+                    </tr>`).join('');
             }
         } catch (e) { console.error(e); }
     }

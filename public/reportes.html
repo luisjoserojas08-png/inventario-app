@@ -223,16 +223,41 @@
         }
     }
 
-    function descargarExcel() {
-        const inicio = document.getElementById('filtro-inicio').value;
-        const fin = document.getElementById('filtro-fin').value;
-        const centro = document.getElementById('filtro-centro').value;
-        let url = `/api/reporte/descargar-historial?tipo=${tipoActual}`;
-        if (inicio) url += `&inicio=${inicio}`; if (fin) url += `&fin=${fin}`;
-        if (tipoActual === 'salidas' && centro) url += `&centro_costo=${centro}`;
-        window.location.href = url;
+   async function descargarExcel() {
+    const inicio = document.getElementById('filtro-inicio').value;
+    const fin = document.getElementById('filtro-fin').value;
+    const centro = document.getElementById('filtro-centro').value;
+    
+    let url = `/api/reporte/descargar-historial?tipo=${tipoActual}`;
+    if (inicio) url += `&inicio=${inicio}`; 
+    if (fin) url += `&fin=${fin}`;
+    if (tipoActual === 'salidas' && centro) url += `&centro_costo=${centro}`;
+    
+    try {
+        const res = await fetch(url, {
+            method: 'GET',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!res.ok) throw new Error("Error en la descarga");
+        
+        const blob = await res.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = downloadUrl;
+        a.download = `Historial_${tipoActual.toUpperCase()}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        
+        window.URL.revokeObjectURL(downloadUrl);
+        a.remove();
+    } catch (e) {
+        console.error(e);
+        alert("No se pudo descargar el archivo. Verifica tu conexión o permisos.");
     }
-
+}
     // Inicializar la vista
     cargarListasFiltro();
     cargarReporte();

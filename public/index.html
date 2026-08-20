@@ -6,19 +6,25 @@
     <title>ERP - Dashboard Inventario</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-      tailwind.config = { theme: { extend: { colors: { corporate: { dark: '#0f172a', primary: '#1e40af', light: '#f8fafc', border: '#e2e8f0' } } } } }
+        tailwind.config = { theme: { extend: { colors: { corporate: { dark: '#0f172a', primary: '#1e40af', light: '#f8fafc', border: '#e2e8f0' } } } } }
     </script>
 </head>
 <body class="bg-corporate-light font-sans text-slate-800 subpixel-antialiased">
 
   <script>
+    // 1. Validar sesión de inmediato
     const token = localStorage.getItem('erp_token') || localStorage.getItem('token');
     if (!token) window.location.href = 'login.html';
     
-    function parseJwt(t) { try { return JSON.parse(atob(t.split('.')[1])); } catch (e) { return null; } }
+    // 2. Función segura para leer el token
+    function parseJwt(t) { 
+        if (!t) return null;
+        try { return JSON.parse(atob(t.split('.')[1])); } 
+        catch (e) { return null; } 
+    }
     const currentUser = parseJwt(token);
     
-    // Evaluamos el permiso basados puramente en el ROL del token
+    // 3. Evaluamos el permiso basados puramente en el ROL del token
     const puedeVerCostos = currentUser && ['Master', 'Administrador', 'Consulta'].includes(currentUser.rol);
   </script>
 
@@ -124,7 +130,7 @@
             document.querySelectorAll('.admin-only').forEach(el => el.classList.add('hidden'));
         }
 
-        // 2. Inyectar columnas de costos solo si es Master o Administrador
+        // 2. Inyectar columnas de costos solo si tiene permiso (Master, Admin, Consulta)
         if (puedeVerCostos) {
             const tablaHead = document.getElementById('tabla-head');
             if(tablaHead) {
@@ -163,8 +169,14 @@
 
         try {
             const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
-            if (!res.ok) throw new Error("Token inválido");
+            if (!res.ok) throw new Error("Error en la conexión con el servidor");
+            
             const lotes = await res.json();
+            
+            // Protección contra errores en la respuesta de la Base de Datos
+            if (!Array.isArray(lotes)) {
+                throw new Error("Formato de datos incorrecto");
+            }
             
             let html = '';
             let valTotal = 0;
@@ -207,13 +219,45 @@
             }
         } catch (e) {
             console.error(e);
-            document.getElementById('tabla-dashboard').innerHTML = `<tr><td colspan="7" class="px-6 py-8 text-center text-red-500">Error al cargar datos. Recargue la página.</td></tr>`;
+            document.getElementById('tabla-dashboard').innerHTML = `<tr><td colspan="${puedeVerCostos ? 7 : 5}" class="px-6 py-8 text-center text-red-500">Error al cargar datos. Compruebe su conexión o recargue la página.</td></tr>`;
         }
     }
 
-    function descargarStockExcel() {
-        // ... (Tu código actual para descargar, lo mantengo intacto)
-        window.location.href = '/api/reporte/descargar-stock?v=1';
+    async function descargarStockExcel() {
+        const almacen = document.getElementById('filtro-almacen').value;
+        const categoria = document.getElementById('filtro-categoria').value;
+        const producto = document.getElementById('filtro-producto').value;
+        
+        let url = '/api/reporte/descargar-stock?v=1';
+        if(almacen) url += `&almacen=${encodeURIComponent(almacen)}`;
+        if(categoria) url += `&categoria=${categoria}`;
+        if(producto) url += `&producto=${producto}`;
+        
+        try {
+            // Enviamos la petición con el Token de forma segura
+            const res = await fetch(url, {
+                method: 'GET',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (!res.ok) throw new Error("No se pudo descargar el archivo");
+            
+            const blob = await res.blob();
+            const downloadUrl = window.URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = downloadUrl;
+            a.download = "Stock_Inventario_Actual.xlsx";
+            document.body.appendChild(a);
+            a.click();
+            
+            window.URL.revokeObjectURL(downloadUrl);
+            a.remove();
+        } catch (e) {
+            console.error(e);
+            alert("Error al intentar descargar el stock. Verifica tu conexión y permisos.");
+        }
     }
   </script>
 </body>

@@ -664,4 +664,21 @@ app.get('/api/reporte/descargar-stock', verificarToken, async (req, res) => {
     } catch (error) { console.error("Error al generar Excel de stock:", error); res.status(500).json({ error: 'Error al generar Excel' }); }
 });
 
+// ==========================================
+// LOGS DE AUDITORÍA DEL SISTEMA
+// ==========================================
+app.get('/api/reporte/logs', verificarToken, verificarRol(['Master', 'Administrador']), async (req, res) => {
+    try {
+        const query = `SELECT l.id, l.accion, l.tabla_afectada, l.registro_id, l.detalles, l.fecha, u.nombre AS admin_nombre 
+                       FROM logs_auditoria l 
+                       LEFT JOIN usuarios u ON l.usuario_id = u.id 
+                       ORDER BY l.fecha DESC LIMIT 100`;
+        const resultado = await pool.query(query);
+        res.json(resultado.rows);
+    } catch (error) { 
+        console.error("Error al consultar logs:", error);
+        res.status(500).json({ error: 'Error al consultar logs de auditoría' }); 
+    }
+});
+
 app.listen(PORT, () => console.log(`Servidor activo en puerto ${PORT}`));

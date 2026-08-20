@@ -27,17 +27,17 @@
     <!-- Sidebar -->
     <aside class="w-64 bg-corporate-dark text-slate-300 flex flex-col hidden md:flex">
       <div class="p-6 text-xl font-bold text-white tracking-wider border-b border-slate-800">ERP Genética</div>
-                  <nav class="flex-1 p-4 space-y-2 overflow-y-auto">
+      <nav class="flex-1 p-4 space-y-2 overflow-y-auto">
         <a href="index.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📊 Dashboard Inventario</a>
-        <a href="costeo.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">💰 Costeo de Existencias</a>
+        <a href="costeo.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">💰 Costeo de Existencias</a>
         <a href="productos.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📦 Maestro de Productos</a>
         <a href="entradas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📥 Registro de Compras</a>
         <a href="salidas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📤 Registro de Salidas</a>
         <a href="reportes.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📑 Historial y Reportes</a>
         <a href="categorias.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🏷️ Categorías y Almacén</a>
         <a href="carga.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📂 Carga Masiva</a>
-        <a href="usuarios.html" class="master-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">👥 Gestión de Usuarios</a>
-        <a href="auditoria.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🛡️ Auditoría del Sistema</a>
+        <a href="usuarios.html" class="block px-4 py-2.5 rounded-lg bg-corporate-primary text-white font-medium shadow-xs">👥 Gestión de Usuarios</a>
+        <a href="auditoria.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🛡️ Auditoría del Sistema</a>
       </nav>
       <div class="p-4 border-t border-slate-800 text-xs text-slate-500">Sesión Activa • Master</div>
     </aside>
@@ -103,7 +103,7 @@
     </div>
   </div>
 
-  <!-- Modal de Edición -->
+  <!-- Modal de Edición Mejorado -->
   <div id="modal-editar" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
     <div class="bg-white rounded-xl border border-corporate-border p-6 w-full max-w-md shadow-xl">
       <h3 class="font-bold text-lg text-slate-800 border-b pb-3 mb-4">Editar Perfil de Usuario</h3>
@@ -112,6 +112,10 @@
         <div>
           <label class="block text-sm font-medium mb-1">Nombre Completo</label>
           <input type="text" id="edit-nombre" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary">
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Usuario (Login)</label>
+          <input type="text" id="edit-usuario" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary">
         </div>
         <div>
           <label class="block text-sm font-medium mb-1">Rol en el Sistema</label>
@@ -124,11 +128,13 @@
         </div>
         <div>
           <label class="block text-sm font-medium mb-1">Nueva Contraseña <span class="text-xs text-slate-400 font-normal">(Opcional)</span></label>
-          <input type="password" id="edit-password" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary" placeholder="Dejar en blanco para mantener la actual">
+          <input type="password" id="edit-password" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary" placeholder="Dejar en blanco para mantener actual">
         </div>
         <div id="edit-msg" class="hidden px-4 py-2 rounded-lg text-sm font-medium"></div>
-        <div class="flex gap-3 pt-2">
-          <button onclick="guardarEdicion()" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-lg font-medium transition shadow-xs">Actualizar Perfil</button>
+        
+        <div class="flex gap-2 pt-2">
+          <button onclick="guardarEdicion()" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-lg font-medium transition shadow-xs">Actualizar</button>
+          <button onclick="borrarUsuario()" class="bg-red-50 hover:bg-red-100 text-red-600 px-4 py-2.5 rounded-lg font-bold border border-red-200 transition tooltip" title="Eliminar Usuario">🗑️</button>
           <button onclick="cerrarModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-2.5 rounded-lg font-medium transition">Cancelar</button>
         </div>
       </div>
@@ -143,12 +149,12 @@
             document.getElementById('tabla-usuarios').innerHTML = usuarios.map(u => `
                 <tr class="hover:bg-slate-50 transition">
                     <td class="px-6 py-4 font-bold text-slate-800">${u.nombre}</td>
-                    <td class="px-6 py-4 font-mono text-slate-500">@${u.usuario}</td>
+                    <td class="px-6 py-4 font-mono text-slate-500">${u.usuario}</td>
                     <td class="px-6 py-4">
                         <span class="bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full text-xs font-semibold">${u.rol}</span>
                     </td>
                     <td class="px-6 py-4 text-right">
-                        <button onclick="abrirEditar('${u.id}', '${u.nombre}', '${u.rol}')" class="text-blue-600 hover:text-blue-800 font-medium text-sm bg-blue-50 px-3 py-1.5 rounded-md transition">Editar</button>
+                        <button onclick="abrirEditar('${u.id}', '${u.nombre}', '${u.usuario}', '${u.rol}')" class="text-blue-600 hover:text-blue-800 font-medium text-sm bg-blue-50 px-3 py-1.5 rounded-md transition">Editar</button>
                     </td>
                 </tr>
             `).join('');
@@ -178,9 +184,10 @@
     });
 
     // Control del Modal
-    function abrirEditar(id, nombre, rol) {
+    function abrirEditar(id, nombre, usuario, rol) {
         document.getElementById('edit-id').value = id;
         document.getElementById('edit-nombre').value = nombre;
+        document.getElementById('edit-usuario').value = usuario;
         document.getElementById('edit-rol').value = rol;
         document.getElementById('edit-password').value = '';
         document.getElementById('edit-msg').classList.add('hidden');
@@ -200,6 +207,7 @@
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({
                     nombre: document.getElementById('edit-nombre').value,
+                    usuario: document.getElementById('edit-usuario').value,
                     rol: document.getElementById('edit-rol').value,
                     password: document.getElementById('edit-password').value
                 })
@@ -214,6 +222,30 @@
                 msg.classList.remove('hidden');
             }
         } catch (error) { console.error(error); }
+    }
+
+    async function borrarUsuario() {
+        const id = document.getElementById('edit-id').value;
+        const nombre = document.getElementById('edit-nombre').value;
+        
+        if(!confirm(`⚠️ ¿Estás totalmente seguro de que deseas eliminar permanentemente el usuario "${nombre}"? Esta acción no se puede deshacer.`)) return;
+
+        try {
+            const res = await fetch(`/api/usuarios/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (res.ok) {
+                cerrarModal();
+                cargarUsuarios();
+            } else {
+                alert(`Error al eliminar: ${data.error}`);
+            }
+        } catch (error) {
+            console.error(error);
+            alert("Error de red al intentar eliminar el usuario.");
+        }
     }
 
     cargarUsuarios();

@@ -18,21 +18,21 @@
 
   <div class="flex h-screen overflow-hidden">
     <!-- Sidebar -->
-   <aside class="w-64 bg-corporate-dark text-slate-300 flex flex-col hidden md:flex">
+    <aside class="w-64 bg-corporate-dark text-slate-300 flex flex-col hidden md:flex">
       <div class="p-6 text-xl font-bold text-white tracking-wider border-b border-slate-800">ERP Genética</div>
-                  <nav class="flex-1 p-4 space-y-2 overflow-y-auto">
+      <nav class="flex-1 p-4 space-y-2 overflow-y-auto">
         <a href="index.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📊 Dashboard Inventario</a>
         <a href="costeo.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">💰 Costeo de Existencias</a>
         <a href="productos.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📦 Maestro de Productos</a>
         <a href="entradas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📥 Registro de Compras</a>
         <a href="salidas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📤 Registro de Salidas</a>
-        <a href="reportes.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📑 Historial y Reportes</a>
+        <a href="reportes.html" class="block px-4 py-2.5 rounded-lg bg-corporate-primary text-white font-medium shadow-xs">📑 Historial y Reportes</a>
         <a href="categorias.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🏷️ Categorías y Almacén</a>
         <a href="carga.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📂 Carga Masiva</a>
         <a href="usuarios.html" class="master-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">👥 Gestión de Usuarios</a>
         <a href="auditoria.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🛡️ Auditoría del Sistema</a>
       </nav>
-      <div class="p-4 border-t border-slate-800 text-xs text-slate-500">Sesión Activa • Neon DB</div>
+      <div class="p-4 border-t border-slate-800 text-xs text-slate-500">Sesión Activa</div>
     </aside>
 
     <!-- Main -->
@@ -43,26 +43,50 @@
 
       <main class="p-8">
         
-        <!-- Controles de Navegación y Filtros de Fecha -->
-        <div class="bg-white p-5 rounded-xl border border-corporate-border shadow-xs mb-6 flex flex-wrap gap-6 items-end justify-between">
-            <div class="flex space-x-3">
-                <button onclick="cambiarVista('entradas')" id="btn-tab-entradas" class="px-5 py-2.5 rounded-lg font-medium text-sm bg-corporate-primary text-white shadow-xs">📥 Historial Entradas</button>
-                <button onclick="cambiarVista('salidas')" id="btn-tab-salidas" class="px-5 py-2.5 rounded-lg font-medium text-sm bg-white border border-slate-300 text-slate-700 hover:bg-slate-50">📤 Historial Salidas</button>
+        <!-- Controles de Navegación y Filtros Avanzados -->
+        <div class="bg-white p-5 rounded-xl border border-corporate-border shadow-xs mb-6 flex flex-col gap-4">
+            
+            <div class="flex flex-wrap gap-4 items-center justify-between border-b pb-4 border-slate-100">
+                <div class="flex space-x-3">
+                    <button onclick="cambiarVista('entradas')" id="btn-tab-entradas" class="px-5 py-2.5 rounded-lg font-medium text-sm bg-corporate-primary text-white shadow-xs">📥 Historial Entradas</button>
+                    <button onclick="cambiarVista('salidas')" id="btn-tab-salidas" class="px-5 py-2.5 rounded-lg font-medium text-sm bg-white border border-slate-300 text-slate-700 hover:bg-slate-50">📤 Historial Salidas</button>
+                </div>
+                <button onclick="descargarHistorialFiltrado()" class="bg-emerald-600 text-white px-5 py-2.5 rounded-lg text-sm hover:bg-emerald-700 font-medium flex items-center gap-2 shadow-xs transition">
+                    📥 Descargar Excel Filtrado
+                </button>
             </div>
             
-            <div class="flex space-x-4 items-end bg-slate-50 p-3 rounded-lg border">
+            <!-- Fila de Filtros Cruzados -->
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
                 <div>
-                    <label class="block text-xs font-semibold text-slate-500 mb-1">Desde</label>
-                    <input type="date" id="fecha-inicio" class="border rounded-md px-3 py-1.5 text-sm">
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">Desde (Fecha)</label>
+                    <input type="date" id="fecha-inicio" class="w-full border rounded-md px-3 py-2 text-sm bg-slate-50 focus:ring-1 focus:ring-blue-500">
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold text-slate-500 mb-1">Hasta</label>
-                    <input type="date" id="fecha-fin" class="border rounded-md px-3 py-1.5 text-sm">
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">Hasta (Fecha)</label>
+                    <input type="date" id="fecha-fin" class="w-full border rounded-md px-3 py-2 text-sm bg-slate-50 focus:ring-1 focus:ring-blue-500">
                 </div>
-                <button onclick="cargarDatos()" class="bg-slate-700 text-white px-4 py-1.5 rounded-md text-sm hover:bg-slate-800">Filtrar</button>
-                <button onclick="descargarHistorialFiltrado()" class="bg-emerald-600 text-white px-4 py-1.5 rounded-md text-sm hover:bg-emerald-700 font-medium flex items-center gap-2">
-                    📥 Descargar Excel
-                </button>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">Filtro Almacén</label>
+                    <select id="filtro-almacen" class="w-full border rounded-md px-3 py-2 text-sm bg-slate-50 focus:ring-1 focus:ring-blue-500">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">Filtro Categoría</label>
+                    <select id="filtro-categoria" class="w-full border rounded-md px-3 py-2 text-sm bg-slate-50 focus:ring-1 focus:ring-blue-500">
+                        <option value="">Todas</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">Filtro Producto</label>
+                    <select id="filtro-producto" class="w-full border rounded-md px-3 py-2 text-sm bg-slate-50 focus:ring-1 focus:ring-blue-500">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+                <div class="md:col-span-5 flex justify-end mt-2">
+                    <button onclick="cargarDatos()" class="bg-slate-700 text-white px-6 py-2 rounded-md text-sm hover:bg-slate-800 shadow-xs font-medium transition">Aplicar Filtros</button>
+                </div>
             </div>
         </div>
 
@@ -89,6 +113,48 @@
   <script>
     let vistaActual = 'entradas';
 
+    // 1. Obtiene las listas de la base de datos para llenar los <select>
+    async function cargarFiltrosListas() {
+        try {
+            const reqOpciones = { headers: { 'Authorization': `Bearer ${token}` } };
+            const [almRes, catRes, prodRes] = await Promise.all([
+                fetch('/api/almacenes', reqOpciones),
+                fetch('/api/categorias', reqOpciones),
+                fetch('/api/productos', reqOpciones)
+            ]);
+            
+            const almacenes = await almRes.json();
+            const categorias = await catRes.json();
+            const productos = await prodRes.json();
+
+            const selAlm = document.getElementById('filtro-almacen');
+            almacenes.forEach(a => selAlm.innerHTML += `<option value="${a.nombre}">${a.nombre}</option>`);
+            
+            const selCat = document.getElementById('filtro-categoria');
+            categorias.forEach(c => selCat.innerHTML += `<option value="${c.id}">${c.nombre}</option>`);
+
+            const selProd = document.getElementById('filtro-producto');
+            productos.forEach(p => selProd.innerHTML += `<option value="${p.id}">${p.nombre} (SKU: ${p.sku})</option>`);
+        } catch (error) { console.error("Error cargando filtros:", error); }
+    }
+
+    // 2. Construye la URL con todos los filtros elegidos
+    function construirUrlFiltros(basePath) {
+        const inicio = document.getElementById('fecha-inicio').value;
+        const fin = document.getElementById('fecha-fin').value;
+        const almacen = document.getElementById('filtro-almacen').value;
+        const categoria = document.getElementById('filtro-categoria').value;
+        const producto = document.getElementById('filtro-producto').value;
+        
+        let url = `${basePath}?v=1`; // Parámetro dummy para iniciar el query string
+        if (inicio && fin) url += `&inicio=${inicio}&fin=${fin}`;
+        if (almacen) url += `&almacen=${encodeURIComponent(almacen)}`;
+        if (categoria) url += `&categoria=${categoria}`;
+        if (producto) url += `&producto=${producto}`;
+        
+        return url;
+    }
+
     function cambiarVista(tipo) {
       vistaActual = tipo;
       
@@ -105,12 +171,7 @@
     }
 
    async function cargarDatos() {
-      const inicio = document.getElementById('fecha-inicio').value;
-      const fin = document.getElementById('fecha-fin').value;
-      
-      let url = `/api/reporte/${vistaActual}`;
-      if (inicio && fin) url += `?inicio=${inicio}&fin=${fin}`;
-
+      const url = construirUrlFiltros(`/api/reporte/${vistaActual}`);
       const tbody = document.getElementById('tabla-cuerpo');
       const thead = document.getElementById('tabla-cabecera');
       
@@ -119,7 +180,7 @@
         const data = await res.json();
 
         if (vistaActual === 'entradas') {
-          thead.innerHTML = `<th class="px-6 py-3">Lote ID</th><th class="px-6 py-3">Producto</th><th class="px-6 py-3">Almacén</th><th class="px-6 py-3">Cantidad</th><th class="px-6 py-3">Costo</th><th class="px-6 py-3">Fecha</th>`;
+          thead.innerHTML = `<th class="px-6 py-3">Lote ID</th><th class="px-6 py-3">Producto</th><th class="px-6 py-3">Almacén</th><th class="px-6 py-3">Cantidad</th><th class="px-6 py-3">Costo Unit.</th><th class="px-6 py-3">Fecha</th>`;
           tbody.innerHTML = data.map(item => `
             <tr class="hover:bg-slate-50">
               <td class="px-6 py-4 font-mono font-bold text-blue-600">LOT-${String(item.id).padStart(3, '0')}</td>
@@ -127,7 +188,7 @@
               <td class="px-6 py-4">${item.almacen || 'Principal'}</td>
               <td class="px-6 py-4 font-bold text-emerald-600">+${Number(item.cantidad).toFixed(2)} ${item.unidad_medida}</td>
               <td class="px-6 py-4">$${Number(item.costo_unitario).toFixed(2)}</td>
-              <td class="px-6 py-4 text-xs text-slate-500">${new Date(item.fecha).toLocaleString()}</td>
+              <td class="px-6 py-4 text-xs text-slate-500">${new Date(item.fecha).toLocaleString('es-VE')}</td>
             </tr>`).join('');
         } else {
          thead.innerHTML = `<th class="px-6 py-3">Ref ID</th><th class="px-6 py-3">Lote Origen</th><th class="px-6 py-3">Producto</th><th class="px-6 py-3">Almacén</th><th class="px-6 py-3">Cantidad</th><th class="px-6 py-3">Concepto</th><th class="px-6 py-3">Fecha</th>`;
@@ -138,39 +199,31 @@
               <td class="px-6 py-4 font-medium text-slate-800">${item.producto_nombre} <br><span class="font-normal text-xs text-slate-400">SKU: ${item.sku}</span></td>
               <td class="px-6 py-4">${item.almacen || 'Principal'}</td>
               <td class="px-6 py-4 font-bold text-red-600">-${Number(item.cantidad).toFixed(2)} ${item.unidad_medida}</td>
-              <td class="px-6 py-4 text-sm">${item.concepto}</td>
-              <td class="px-6 py-4 text-xs text-slate-500">${new Date(item.fecha).toLocaleString()}</td>
+              <td class="px-6 py-4 text-sm truncate max-w-[200px]" title="${item.concepto}">${item.concepto}</td>
+              <td class="px-6 py-4 text-xs text-slate-500">${new Date(item.fecha).toLocaleString('es-VE')}</td>
             </tr>`).join('');
-        } // ESTA ES LA LLAVE QUE FALTABA
+        }
       } catch (e) { tbody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-red-500">Error al cargar datos.</td></tr>`; }
     } 
 
     async function descargarHistorialFiltrado() {
-      const inicio = document.getElementById('fecha-inicio').value;
-      const fin = document.getElementById('fecha-fin').value;
-      
-      let url = `/api/reporte/descargar-historial?tipo=${vistaActual}`;
-      if (inicio && fin) url += `&inicio=${inicio}&fin=${fin}`;
+      // Usa la misma función central de URL pero apuntando al endpoint de Excel
+      const url = construirUrlFiltros(`/api/reporte/descargar-historial`);
+      const urlExcel = url + `&tipo=${vistaActual}`;
 
       try {
-        const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
-        if (!res.ok) return alert("Error al generar el reporte.");
+        const res = await fetch(urlExcel, { headers: { 'Authorization': `Bearer ${token}` } });
+        if (!res.ok) return alert("Error al generar el reporte en Excel.");
         const blob = await res.blob();
         const a = document.createElement('a');
         a.href = window.URL.createObjectURL(blob); 
-        a.download = `Historial_${vistaActual}_${inicio || 'todo'}.xlsx`;
+        a.download = `Historial_${vistaActual}_Filtrado.xlsx`;
         a.click();
-      } catch (e) { alert("Error de red al descargar."); }
+      } catch (e) { alert("Error de red al intentar descargar el Excel."); }
     }
 
-    async function descargarReporteGlobal() {
-      const res = await fetch('/api/reporte-salidas', { headers: { 'Authorization': `Bearer ${token}` } });
-      const blob = await res.blob();
-      const a = document.createElement('a');
-      a.href = window.URL.createObjectURL(blob); a.download = 'inventario_actual.xlsx';
-      a.click();
-    }
-
+    // Arranque inicial
+    cargarFiltrosListas();
     cargarDatos();
   </script>
 </body>

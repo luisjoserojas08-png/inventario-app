@@ -354,6 +354,7 @@ app.put('/api/costeo/lotes/:id', verificarToken, verificarRol(['Master', 'Admini
         res.json({ mensaje: 'Costo actualizado correctamente' });
     } catch (error) { res.status(500).json({ error: 'Error al actualizar costo' }); }
 });
+
 // ==========================================
 // ADMIN: EDICIÓN Y BORRADO DE TRANSACCIONES
 // ==========================================
@@ -602,20 +603,56 @@ app.get('/api/reporte/logs', verificarToken, verificarRol(['Master', 'Administra
 // ==========================================
 // CARGA MASIVA EXCEL
 // ==========================================
+// ==========================================
+// CARGA MASIVA EXCEL
+// ==========================================
 app.post('/api/cargar-masiva/:tipo', verificarToken, verificarRol(['Master', 'Administrador']), upload.single('file'), async (req, res) => {
-    const { tipo } = req.params; const workbook = xlsx.readFile(req.file.path); const sheet = workbook.Sheets[workbook.SheetNames[0]]; const data = xlsx.utils.sheet_to_json(sheet); const client = await pool.connect();
+    const { tipo } = req.params; 
+    const workbook = xlsx.readFile(req.file.path); 
+    const sheet = workbook.Sheets[workbook.SheetNames[0]]; 
+    
+    // raw: false obliga a que la librería lea la fecha tal cual se ve en la celda de Excel (ej: "20/08/2026")
+    const data = xlsx.utils.sheet_to_json(sheet, { raw: false }); 
+    const client = await pool.connect();
+    
     try {
         await client.query('BEGIN');
         for (let row of data) {
-            if (tipo === 'productos') await client.query('INSERT INTO productos (sku, nombre, categoria_id, unidad_medida) VALUES ($1, $2, $3, $4)', [row.SKU, row.NOMBRE, row.CATEGORIA_ID, row.UOM]);
-            else if (tipo === 'categorias') await client.query('INSERT INTO categorias (nombre, almacen) VALUES ($1, $2)', [row.NOMBRE, row.ALMACEN]);
+            if (tipo === 'productos') {
+                await client.query('INSERT INTO productos (sku, nombre, categoria_id, unidad_medida) VALUES ($1, $2, $3, $4)', [row.SKU, row.NOMBRE, row.CATEGORIA_ID, row.UOM]);
+            }
+            else if (tipo === 'categorias') {
+                await client.query('INSERT INTO categorias (nombre, almacen) VALUES ($1, $2)', [row.NOMBRE, row.ALMACEN]);
+            }
             else if (tipo === 'inventario') {
-                await client.query('INSERT INTO entradas (producto_id, cantidad, costo_unitario, stock_restante, fecha, usuario_id) VALUES ($1, $2, $3, $4, NOW(), $5)', [row.PRODUCTO_ID, row.CANTIDAD, row.COSTO, row.CANTIDAD, req.user.id]);
-                await client.query('UPDATE productos SET stock_actual = stock_actual + $1 WHERE id = $2', [row.CANTIDAD, row.PRODUCTO_ID]);
+                
+                // Lógica de conversión de Fecha (DD/MM/YYYY)
+                let fechaEntrada = new Date().toISOString(); // Si viene vacía, usa la fecha y hora actual
+                if (row.FECHA) {
+                    const partes = String(row.FECHA).split('/');
+                    if (partes.length === 3) {
+                        const dia = partes[0].padStart(2, '0');
+                        const mes = partes[1].padStart(2, '0');
+                        const anio = partes[2];
+                        
+                        // Le clavamos las 12:00 del mediodía con zona horaria -04:00 para evitar que 
+                        // se reste horas y caiga en el día anterior al guardar en la base de datos
+                        fechaEntrada = `${anio}-${mes}-${dia}T12:00:00-04:00`; 
+                    }
+                }
+
+                await client.query('INSERT INTO entradas (producto_id, cantidad, costo_unitario, stock_restante, fecha, usuario_id) VALUES ($1, $2, $3, $4, $5, $6)', 
+                    [row.PRODUCTO_ID, row.CANTIDAD, row.COSTO, row.CANTIDAD, fechaEntrada, req.user.id]);
+                
+                await client.query('UPDATE productos SET stock_actual = stock_actual + $1 WHERE id = $2', 
+                    [row.CANTIDAD, row.PRODUCTO_ID]);
             }
         }
         await client.query('COMMIT'); res.json({ mensaje: `Carga masiva de ${tipo} completada` });
-    } catch (e) { await client.query('ROLLBACK'); res.status(500).json({ error: e.message }); } finally { client.release(); }
+    } catch (e) { 
+        await client.query('ROLLBACK'); 
+        res.status(500).json({ error: e.message }); 
+    } finally { 
+        client.release(); 
+    }
 });
-
-app.listen(PORT, () => console.log(`Servidor activo en puerto ${PORT}`));

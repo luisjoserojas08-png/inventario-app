@@ -226,7 +226,19 @@ app.post('/api/entradas', verificarToken, verificarRol(['Master', 'Administrador
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        const fechaTransaccion = req.body.fecha || new Date().toISOString();
+        
+        // CORRECCIÓN DE ZONA HORARIA Y HORA EXACTA
+        let fechaTransaccion = new Date().toISOString();
+        if (req.body.fecha) {
+            if (req.body.fecha.includes('T')) {
+                fechaTransaccion = req.body.fecha;
+            } else {
+                const ahora = new Date();
+                const hora = ahora.toTimeString().split(' ')[0]; // Extrae "HH:MM:SS"
+                fechaTransaccion = `${req.body.fecha}T${hora}-04:00`; // Forza la zona horaria local
+            }
+        }
+
         const cantidadNumerica = parseFloat(req.body.cantidad);
         const nroDocumento = req.body.nro_documento || 'S/N';
         const costoNumerico = 0;
@@ -246,7 +258,19 @@ app.post('/api/salidas', verificarToken, verificarRol(['Master', 'Administrador'
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        const fechaTransaccion = req.body.fecha || new Date().toISOString();
+        
+        // CORRECCIÓN DE ZONA HORARIA Y HORA EXACTA
+        let fechaTransaccion = new Date().toISOString();
+        if (req.body.fecha) {
+            if (req.body.fecha.includes('T')) {
+                fechaTransaccion = req.body.fecha;
+            } else {
+                const ahora = new Date();
+                const hora = ahora.toTimeString().split(' ')[0]; // Extrae "HH:MM:SS"
+                fechaTransaccion = `${req.body.fecha}T${hora}-04:00`; // Forza la zona horaria local
+            }
+        }
+
         const cantidadNumerica = parseFloat(req.body.cantidad);
         const centroCostoId = req.body.centro_costo_id ? parseInt(req.body.centro_costo_id) : null;
 

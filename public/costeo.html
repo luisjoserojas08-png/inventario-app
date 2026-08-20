@@ -9,61 +9,59 @@
       tailwind.config = { theme: { extend: { colors: { corporate: { dark: '#0f172a', primary: '#1e40af', light: '#f8fafc', border: '#e2e8f0' } } } } }
     </script>
 </head>
-<body class="bg-corporate-light font-sans text-slate-800 subpixel-antialiased">
+<body class="bg-corporate-light font-sans text-slate-800">
 
   <script>
     const token = localStorage.getItem('erp_token') || localStorage.getItem('token');
     if (!token) window.location.href = 'login.html';
-    function parseJwt(t) { try { return JSON.parse(atob(t.split('.')[1])); } catch (e) { return null; } }
-    const currentUser = parseJwt(token);
-    // Actualízala así para permitir ambos roles:
-if (currentUser && currentUser.rol !== 'Master' && currentUser.rol !== 'Administrador') {
-    window.location.href = 'index.html';
-}
   </script>
 
   <div class="flex h-screen overflow-hidden">
     <!-- Sidebar -->
-    <aside class="w-64 bg-corporate-dark text-slate-300 flex flex-col hidden md:flex">
+    <aside class="w-64 bg-corporate-dark text-slate-300 flex flex-col hidden md:flex shrink-0">
       <div class="p-6 text-xl font-bold text-white tracking-wider border-b border-slate-800">ERP Genética</div>
-                  <nav class="flex-1 p-4 space-y-2 overflow-y-auto">
+      <nav class="flex-1 p-4 space-y-2 overflow-y-auto">
         <a href="index.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📊 Dashboard Inventario</a>
-        <a href="costeo.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">💰 Costeo de Existencias</a>
+        <a href="costeo.html" class="block px-4 py-2.5 rounded-lg bg-corporate-primary text-white font-medium shadow-xs">💰 Costeo de Existencias</a>
         <a href="productos.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📦 Maestro de Productos</a>
         <a href="entradas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📥 Registro de Compras</a>
         <a href="salidas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📤 Registro de Salidas</a>
         <a href="reportes.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📑 Historial y Reportes</a>
         <a href="categorias.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🏷️ Categorías y Almacén</a>
         <a href="carga.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📂 Carga Masiva</a>
-        <a href="usuarios.html" class="master-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">👥 Gestión de Usuarios</a>
-        <a href="auditoria.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🛡️ Auditoría del Sistema</a>
+        <a href="usuarios.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">👥 Gestión de Usuarios</a>
+        <a href="auditoria.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🛡️ Auditoría del Sistema</a>
       </nav>
+      <div class="p-4 border-t border-slate-800 text-xs text-slate-500">Sesión Activa</div>
     </aside>
 
     <div class="flex-1 flex flex-col overflow-y-auto">
-      <header class="bg-white border-b h-16 flex items-center justify-between px-8 shadow-xs">
+      <header class="bg-white border-b h-16 flex items-center justify-between px-8 shadow-xs shrink-0">
         <h1 class="text-lg font-semibold text-slate-700">Valorización y Costeo de Lotes</h1>
-        <button onclick="localStorage.clear(); window.location.href='login.html'" class="text-sm text-red-600 font-medium bg-red-50 px-3 py-1.5 rounded-lg">Cerrar Sesión</button>
       </header>
 
       <main class="p-8">
+        <!-- Buscador -->
+        <div class="mb-6 bg-white p-4 rounded-xl border shadow-xs flex gap-4 items-center">
+            <span class="text-slate-400">🔍</span>
+            <input type="text" id="filtro-costeo" oninput="filtrarTabla()" placeholder="Buscar producto o SKU..." class="w-full outline-none text-slate-700 font-medium">
+        </div>
+
         <div class="bg-white rounded-xl border border-corporate-border shadow-xs overflow-hidden">
-          <div class="px-6 py-4 border-b bg-slate-50 flex justify-between items-center">
-            <h3 class="font-bold text-slate-700">Lotes de Entrada (Pendientes y Valorizados)</h3>
-          </div>
-          <div class="overflow-x-auto max-h-[75vh]">
-            <table class="w-full text-left border-collapse">
+          <div class="px-6 py-4 border-b bg-slate-50"><h3 class="font-bold text-slate-700">Lotes de Entrada (Pendientes y Valorizados)</h3></div>
+          <div class="overflow-x-auto max-h-[65vh]">
+            <table class="w-full text-left">
               <thead>
-                <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b sticky top-0 shadow-sm">
-                  <th class="px-6 py-3 bg-slate-50">Lote / Fecha</th>
-                  <th class="px-6 py-3 bg-slate-50">Documento</th>
-                  <th class="px-6 py-3 bg-slate-50">Producto Ingresado</th>
-                  <th class="px-6 py-3 bg-slate-50">Costo Unitario ($)</th>
-                  <th class="px-6 py-3 bg-slate-50 text-right">Acción</th>
+                <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b sticky top-0">
+                  <th class="px-6 py-3">Lote / Fecha</th>
+                  <th class="px-6 py-3">Documento</th>
+                  <th class="px-6 py-3">Producto Ingresado</th>
+                  <th class="px-6 py-3">Costo Unitario ($)</th>
+                  <th class="px-6 py-3 text-right">Acción</th>
                 </tr>
               </thead>
               <tbody id="tabla-costeo" class="divide-y text-sm text-slate-600">
-                <tr><td colspan="5" class="px-6 py-6 text-center text-slate-400">Cargando...</td></tr>
+                <tr><td colspan="5" class="px-6 py-6 text-center text-slate-400">Cargando datos...</td></tr>
               </tbody>
             </table>
           </div>
@@ -73,43 +71,56 @@ if (currentUser && currentUser.rol !== 'Master' && currentUser.rol !== 'Administ
   </div>
 
   <script>
+    let todosLosLotes = []; // Almacenamos todo aquí para filtrar rápido
+
     async function cargarLotes() {
+        const tbody = document.getElementById('tabla-costeo');
         try {
             const res = await fetch('/api/costeo/lotes', { headers: { 'Authorization': `Bearer ${token}` } });
-            const lotes = await res.json();
-            const tbody = document.getElementById('tabla-costeo');
-            
-            if (!lotes.length) {
-                tbody.innerHTML = `<tr><td colspan="5" class="px-6 py-6 text-center text-slate-400">No hay lotes registrados.</td></tr>`;
-                return;
-            }
-
-            tbody.innerHTML = lotes.map(l => {
-                const sinCosto = parseFloat(l.costo_unitario) === 0;
-                return `
-                <tr class="hover:bg-slate-50 transition ${sinCosto ? 'bg-red-50/30' : ''}">
-                    <td class="px-6 py-4">
-                        <div class="font-bold text-slate-700">LOT-${String(l.id).padStart(3, '0')}</div>
-                        <div class="text-xs text-slate-500">${new Date(l.fecha).toLocaleDateString()}</div>
-                    </td>
-                    <td class="px-6 py-4 font-mono font-medium text-slate-600">${l.nro_documento || 'S/N'}</td>
-                    <td class="px-6 py-4">
-                        <div class="font-bold text-slate-800">${l.nombre}</div>
-                        <div class="text-xs text-slate-500">SKU: ${l.sku} | Cant: ${l.cantidad} ${l.unidad_medida}</div>
-                    </td>
-                    <td class="px-6 py-4">
-                        <input type="number" id="costo-${l.id}" step="0.01" min="0" value="${l.costo_unitario}" 
-                            class="w-24 px-2 py-1 border rounded focus:ring-2 focus:ring-corporate-primary ${sinCosto ? 'border-red-300 bg-red-50 text-red-700 font-bold' : 'bg-slate-50'}">
-                    </td>
-                    <td class="px-6 py-4 text-right">
-                        <button onclick="guardarCosto(${l.id})" class="text-emerald-700 hover:text-emerald-900 font-medium text-sm bg-emerald-50 px-3 py-1.5 rounded-md transition shadow-xs">Guardar Costo</button>
-                    </td>
-                </tr>
-            `}).join('');
-        } catch (e) { console.error(e); }
+            todosLosLotes = await res.json();
+            filtrarTabla(); // Mostramos todo inicialmente
+        } catch (e) {
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-red-500">Error al cargar datos.</td></tr>`;
+        }
     }
 
-    window.guardarCosto = async function(id) {
+    function filtrarTabla() {
+        const filtro = document.getElementById('filtro-costeo').value.toLowerCase();
+        const tbody = document.getElementById('tabla-costeo');
+        
+        const filtrados = todosLosLotes.filter(l => 
+            l.nombre.toLowerCase().includes(filtro) || 
+            l.sku.toLowerCase().includes(filtro)
+        );
+
+        if (filtrados.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-slate-400">No se encontraron productos.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = filtrados.map(l => `
+            <tr class="hover:bg-slate-50">
+                <td class="px-6 py-4">
+                    <p class="font-bold text-blue-600 font-mono">LOT-${String(l.id).padStart(3, '0')}</p>
+                    <p class="text-xs text-slate-400">${new Date(l.fecha).toLocaleDateString('es-VE')}</p>
+                </td>
+                <td class="px-6 py-4 text-slate-600">${l.nro_documento || 'S/N'}</td>
+                <td class="px-6 py-4">
+                    <p class="font-medium">${l.nombre}</p>
+                    <p class="text-xs text-slate-400">SKU: ${l.sku}</p>
+                </td>
+                <td class="px-6 py-4">
+                    <input type="number" id="costo-${l.id}" value="${Number(l.costo_unitario).toFixed(2)}" 
+                           class="w-24 border rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 outline-none">
+                </td>
+                <td class="px-6 py-4 text-right">
+                    <button onclick="guardarCosto(${l.id})" class="bg-emerald-600 text-white px-3 py-1.5 rounded text-xs hover:bg-emerald-700 shadow-sm">Guardar</button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    async function guardarCosto(id) {
         const nuevoCosto = document.getElementById(`costo-${id}`).value;
         try {
             const res = await fetch(`/api/costeo/lotes/${id}`, {
@@ -117,10 +128,14 @@ if (currentUser && currentUser.rol !== 'Master' && currentUser.rol !== 'Administ
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ costo_unitario: nuevoCosto })
             });
-            if(res.ok) cargarLotes();
-            else alert('Error al guardar costo');
-        } catch (error) { console.error(error); }
-    };
+            if (res.ok) {
+                alert("Costo actualizado exitosamente.");
+                cargarLotes();
+            } else {
+                alert("No se pudo actualizar el costo.");
+            }
+        } catch (e) { console.error(e); }
+    }
 
     cargarLotes();
   </script>

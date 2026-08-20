@@ -444,6 +444,57 @@ app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => 
     } catch (error) { res.status(500).json({ error: 'Error al generar Excel: ' + error.message }); }
 });
 // ==========================================
+// REPORTES HISTÓRICOS (JSON PARA LAS TABLAS EN PANTALLA)
+// ==========================================
+app.get('/api/reporte/entradas', verificarToken, async (req, res) => {
+    const { inicio, fin } = req.query;
+    let query = `SELECT e.id, p.sku, p.nombre AS producto_nombre, p.unidad_medida, c.almacen, e.cantidad, e.costo_unitario, e.fecha 
+                 FROM entradas e 
+                 JOIN productos p ON e.producto_id = p.id 
+                 LEFT JOIN categorias c ON p.categoria_id = c.id`;
+    let params = [];
+    if (inicio && fin) {
+        query += ` WHERE e.fecha >= $1 AND e.fecha <= $2`;
+        params.push(new Date(inicio), new Date(`${fin}T23:59:59.999Z`));
+    }
+    query += ` ORDER BY e.fecha DESC;`;
+    
+    try { 
+        res.json((await pool.query(query, params)).rows); 
+    } catch (error) { 
+        res.status(500).json({ error: 'Error al consultar entradas' }); 
+    }
+});
+
+app.get('/api/reporte/salidas', verificarToken, async (req, res) => {
+    const { inicio, fin } = req.query;
+    let query = `SELECT s.id, p.sku, p.nombre AS producto_nombre, p.unidad_medida, c.almacen, s.cantidad, s.concepto, s.fecha, s.lote_origen_id 
+                 FROM salidas s 
+                 JOIN productos p ON s.producto_id = p.id 
+                 LEFT JOIN categorias c ON p.categoria_id = c.id`;
+    let params = [];
+    if (inicio && fin) {
+        query += ` WHERE s.fecha >= $1 AND s.fecha <= $2`;
+        params.push(new Date(inicio), new Date(`${fin}T23:59:59.999Z`));
+    }
+    query += ` ORDER BY s.fecha DESC;`;
+    
+    try { 
+        res.json((await pool.query(query, params)).rows); 
+    } catch (error) { 
+        res.status(500).json({ error: 'Error al consultar salidas' }); 
+    }
+});
+
+app.get('/api/reporte/logs', verificarToken, verificarRol(['Master', 'Administrador']), async (req, res) => {
+    try { 
+        const query = 'SELECT l.*, u.nombre AS usuario_nombre FROM logs_auditoria l JOIN usuarios u ON l.usuario_id = u.id ORDER BY l.fecha DESC LIMIT 100';
+        res.json((await pool.query(query)).rows); 
+    } catch (error) { 
+        res.status(500).json({ error: 'Error al consultar auditoría' }); 
+    }
+});
+// ==========================================
 // CARGA MASIVA EXCEL
 // ==========================================
 app.post('/api/cargar-masiva/:tipo', verificarToken, verificarRol(['Master', 'Administrador']), upload.single('file'), async (req, res) => {

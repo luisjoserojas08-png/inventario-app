@@ -362,8 +362,13 @@ app.put('/api/costeo/lotes/:id', verificarToken, verificarRol(['Master', 'Admini
 // ADMIN: EDICIÓN Y BORRADO DE TRANSACCIONES
 // ==========================================
 app.put('/api/admin/movimientos/:tipo/:id', verificarToken, verificarRol(['Master', 'Administrador']), async (req, res) => {
-    const { tipo, id } = req.params; const nueva_cantidad = parseFloat(req.body.nueva_cantidad);
-    const { motivo } = req.body; const tabla = tipo === 'entrada' ? 'entradas' : 'salidas';
+    const { tipo, id } = req.params; 
+    
+    // CORRECCIÓN: Reemplazamos la coma por punto para que acepte formatos en español (ej: 187,98)
+    const nueva_cantidad = parseFloat(String(req.body.nueva_cantidad).replace(',', '.'));
+    
+    const { motivo } = req.body; 
+    const tabla = tipo === 'entrada' ? 'entradas' : 'salidas';
     const client = await pool.connect();
     
     try {
@@ -667,9 +672,12 @@ app.get('/api/reporte/descargar-stock', verificarToken, async (req, res) => {
 // ==========================================
 // LOGS DE AUDITORÍA DEL SISTEMA
 // ==========================================
+// ==========================================
+// LOGS DE AUDITORÍA DEL SISTEMA
+// ==========================================
 app.get('/api/reporte/logs', verificarToken, verificarRol(['Master', 'Administrador']), async (req, res) => {
     try {
-        const query = `SELECT l.id, l.accion, l.tabla_afectada, l.registro_id, l.detalles, l.fecha, u.nombre AS admin_nombre 
+        const query = `SELECT l.id, l.accion, l.tabla_afectada, l.registro_id, l.detalles, l.fecha, u.nombre AS admin, u.nombre AS admin_nombre 
                        FROM logs_auditoria l 
                        LEFT JOIN usuarios u ON l.usuario_id = u.id 
                        ORDER BY l.fecha DESC LIMIT 100`;

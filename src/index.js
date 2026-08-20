@@ -339,6 +339,14 @@ app.post('/api/salidas', verificarToken, verificarRol(['Master', 'Administrador'
 // ==========================================
 // MÓDULO DE COSTEO (Solo Master y Admin)
 // ==========================================
+app.get('/api/costeo/lotes', verificarToken, async (req, res) => {
+    try {
+        const query = `SELECT e.id, p.sku, p.nombre, p.unidad_medida, e.cantidad, e.costo_unitario, e.fecha, e.nro_documento 
+                       FROM entradas e JOIN productos p ON e.producto_id = p.id ORDER BY e.fecha DESC`;
+        res.json((await pool.query(query)).rows);
+    } catch (error) { res.status(500).json({ error: 'Error al consultar lotes' }); }
+});
+
 app.put('/api/costeo/lotes/:id', verificarToken, verificarRol(['Master', 'Administrador']), async (req, res) => {
     try {
         const nuevoCosto = parseFloat(req.body.costo_unitario);
@@ -346,7 +354,6 @@ app.put('/api/costeo/lotes/:id', verificarToken, verificarRol(['Master', 'Admini
         res.json({ mensaje: 'Costo actualizado correctamente' });
     } catch (error) { res.status(500).json({ error: 'Error al actualizar costo' }); }
 });
-
 // ==========================================
 // ADMIN: EDICIÓN Y BORRADO DE TRANSACCIONES
 // ==========================================

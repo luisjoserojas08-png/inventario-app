@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs'); // Añadido para manejar archivos y carpetas
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const ExcelJS = require('exceljs');
@@ -8,6 +9,11 @@ const pool = require('./config/db');
 
 const multer = require('multer');
 const xlsx = require('xlsx');
+
+// Asegurar que la carpeta uploads exista para evitar que Render colapse
+if (!fs.existsSync('uploads')) {
+    fs.mkdirSync('uploads', { recursive: true });
+}
 const upload = multer({ dest: 'uploads/' });
 
 const app = express();
@@ -280,15 +286,14 @@ app.post('/api/entradas', verificarToken, verificarRol(['Master', 'Administrador
     try {
         await client.query('BEGIN');
         
-        // CORRECCIÓN DE ZONA HORARIA Y HORA EXACTA
         let fechaTransaccion = new Date().toISOString();
         if (req.body.fecha) {
             if (req.body.fecha.includes('T')) {
                 fechaTransaccion = req.body.fecha;
             } else {
                 const ahora = new Date();
-                const hora = ahora.toTimeString().split(' ')[0]; // Extrae "HH:MM:SS"
-                fechaTransaccion = `${req.body.fecha}T${hora}-04:00`; // Forza la zona horaria local
+                const hora = ahora.toTimeString().split(' ')[0]; 
+                fechaTransaccion = `${req.body.fecha}T${hora}-04:00`; 
             }
         }
 
@@ -312,15 +317,14 @@ app.post('/api/salidas', verificarToken, verificarRol(['Master', 'Administrador'
     try {
         await client.query('BEGIN');
         
-        // CORRECCIÓN DE ZONA HORARIA Y HORA EXACTA
         let fechaTransaccion = new Date().toISOString();
         if (req.body.fecha) {
             if (req.body.fecha.includes('T')) {
                 fechaTransaccion = req.body.fecha;
             } else {
                 const ahora = new Date();
-                const hora = ahora.toTimeString().split(' ')[0]; // Extrae "HH:MM:SS"
-                fechaTransaccion = `${req.body.fecha}T${hora}-04:00`; // Forza la zona horaria local
+                const hora = ahora.toTimeString().split(' ')[0]; 
+                fechaTransaccion = `${req.body.fecha}T${hora}-04:00`; 
             }
         }
 
@@ -601,10 +605,7 @@ app.get('/api/reporte/logs', verificarToken, verificarRol(['Master', 'Administra
 });
 
 // ==========================================
-// CARGA MASIVA EXCEL
-// ==========================================
-// ==========================================
-// CARGA MASIVA EXCEL
+// CARGA MASIVA EXCEL (CON SOPORTE DE FECHAS)
 // ==========================================
 app.post('/api/cargar-masiva/:tipo', verificarToken, verificarRol(['Master', 'Administrador']), upload.single('file'), async (req, res) => {
     const { tipo } = req.params; 
@@ -656,3 +657,5 @@ app.post('/api/cargar-masiva/:tipo', verificarToken, verificarRol(['Master', 'Ad
         client.release(); 
     }
 });
+
+app.listen(PORT, () => console.log(`Servidor activo en puerto ${PORT}`));

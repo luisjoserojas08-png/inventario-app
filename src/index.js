@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const fs = require('fs'); // Añadido para manejar archivos y carpetas
+const fs = require('fs');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const ExcelJS = require('exceljs');
@@ -238,7 +238,6 @@ app.put('/api/productos/:id', verificarToken, verificarRol(['Master', 'Administr
     } catch (error) { res.status(500).json({ error: 'Error al actualizar producto' }); }
 });
 
-// El GET (Lectura) sí se queda para todos, porque el Operario necesita ver la lista de productos para dar entradas/salidas
 app.get('/api/productos', verificarToken, async (req, res) => {
     try { 
         const query = `SELECT p.id, p.sku, p.nombre, p.unidad_medida, p.categoria_id, c.nombre AS categoria_nombre, 
@@ -411,7 +410,7 @@ app.delete('/api/admin/movimientos/:tipo/:id', verificarToken, verificarRol(['Ma
 });
 
 // ==========================================
-// EXCEL DE REPORTES (CON SEGURIDAD POR ROL)
+// EXCEL DE REPORTES HISTÓRICOS (CON FORMATO Y 200 OK PARA RENDER)
 // ==========================================
 app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => {
     const { tipo, inicio, fin, centro_costo } = req.query; 
@@ -419,8 +418,6 @@ app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => 
         const userQuery = await pool.query('SELECT nombre, rol FROM usuarios WHERE id = $1', [req.user.id]);
         const userName = userQuery.rows.length > 0 ? userQuery.rows[0].nombre : 'Usuario Sistema';
         const userRol = userQuery.rows.length > 0 ? userQuery.rows[0].rol : 'Operario';
-        
-        // VALIDACIÓN DE ROL: Solo Master y Administrador ven costos
         const puedeVerCostos = ['Master', 'Administrador', 'Consulta'].includes(userRol);
 
         const workbook = new ExcelJS.Workbook();
@@ -429,10 +426,8 @@ app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => 
         let query = ''; 
         const fechaInicio = inicio ? new Date(inicio + 'T00:00:00') : new Date('2000-01-01'); 
         const fechaFin = fin ? new Date(`${fin}T23:59:59.999Z`) : new Date();
-
         let params = [fechaInicio, fechaFin]; let paramIndex = 3;
 
-        // Armamos las columnas base (sin dinero)
         let cols = [ 
             { header: tipo === 'entradas' ? 'Lote' : 'Salida', key: 'id_lote', width: 12 }, 
             { header: 'SKU', key: 'sku', width: 15 }, 
@@ -440,10 +435,7 @@ app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => 
             { header: 'Cant.', key: 'cantidad', width: 15 }
         ];
 
-        // Si tiene permiso, agregamos las columnas financieras
-        if (puedeVerCostos) {
-            cols.push({ header: 'Costo Unit.', key: 'costo_unitario', width: 15 }, { header: 'Costo Total ($)', key: 'costo_total', width: 18 });
-        }
+        if (puedeVerCostos) cols.push({ header: 'Costo Unit.', key: 'costo_unitario', width: 15 }, { header: 'Costo Total ($)', key: 'costo_total', width: 18 });
 
         if (tipo === 'entradas') {
             cols.push({ header: 'Doc.', key: 'nro_documento', width: 15 }, { header: 'Usuario', key: 'usuario_nombre', width: 20 }, { header: 'Fecha', key: 'fecha', width: 22 });
@@ -461,34 +453,46 @@ app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => 
 
         worksheet.columns = cols;
         worksheet.spliceRows(1, 0, [], [], [], []);
+        
+        const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        const lastCol = alphabet[cols.length - 1];
+        const fechaActual = new Date().toLocaleString('es-VE', { timeZone: 'America/Caracas' });
+
         worksheet.getCell('A1').value = `HISTORIAL DE ${tipo.toUpperCase()}`;
-        worksheet.getCell('A1').font = { size: 13, bold: true, color: { argb: 'FF1E40AF' } };
+        worksheet.getCell('A1').font = { size: 14, bold: true, color: { argb: 'FF1E40AF' } };
+
+        worksheet.mergeCells(`A2:${lastCol}2`);
+        const cellFecha = worksheet.getCell('A2');
+        cellFecha.value = `Fecha de emisión: ${fechaActual}`;
+        cellFecha.font = { bold: true };
+        cellFecha.alignment = { horizontal: 'right', vertical: 'middle' };
+
+        worksheet.mergeCells(`A3:${lastCol}3`);
+        const cellUsuario = worksheet.getCell('A3');
+        cellUsuario.value = `Generado por: ${userName}`;
+        cellUsuario.alignment = { horizontal: 'right', vertical: 'middle' };
 
         const headerRow = worksheet.getRow(5);
-        headerRow.eachCell({ includeEmpty: false }, (cell) => { cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } }; cell.alignment = { vertical: 'middle', horizontal: 'center' }; });
+        headerRow.eachCell({ includeEmpty: false }, (cell) => { 
+            cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }; 
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } }; 
+            cell.alignment = { vertical: 'middle', horizontal: 'center' }; 
+        });
 
         const resultado = await pool.query(query, params);
-
         resultado.rows.forEach(r => {
             let fila = { ...r, id_lote: tipo === 'entradas' ? `LOT-${String(r.id).padStart(3, '0')}` : `SAL-${String(r.id).padStart(3, '0')}`, cantidad: parseFloat(r.cantidad), usuario_nombre: r.usuario_nombre || 'Sistema', fecha: new Date(r.fecha).toLocaleString('es-VE', { timeZone: 'America/Caracas' }) };
-            
-            // Calculamos costos solo si tiene permiso
-            if (puedeVerCostos) {
-                fila.costo_unitario = parseFloat(r.costo_unitario) || 0;
-                fila.costo_total = fila.cantidad * fila.costo_unitario;
-            }
+            if (puedeVerCostos) { fila.costo_unitario = parseFloat(r.costo_unitario) || 0; fila.costo_total = fila.cantidad * fila.costo_unitario; }
             if (tipo === 'salidas') fila.centro_costo_nombre = r.centro_costo_nombre || 'General';
             
             const newRow = worksheet.addRow(fila);
             newRow.getCell('cantidad').numFmt = '#,##0.00';
-            if (puedeVerCostos) {
-                newRow.getCell('costo_unitario').numFmt = '"$"#,##0.00';
-                newRow.getCell('costo_total').numFmt = '"$"#,##0.00';
-            }
+            if (puedeVerCostos) { newRow.getCell('costo_unitario').numFmt = '"$"#,##0.00'; newRow.getCell('costo_total').numFmt = '"$"#,##0.00'; }
         });
         
+        res.status(200);
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.setHeader('Content-Disposition', `attachment; filename="Historial_${tipo}_${inicio || 'General'}.xlsx"`);
+        res.setHeader('Content-Disposition', `attachment; filename="Historial_${tipo}.xlsx"`);
         await workbook.xlsx.write(res); res.end();
     } catch (error) { res.status(500).json({ error: 'Error al generar Excel: ' + error.message }); }
 });
@@ -510,7 +514,6 @@ app.get('/api/reporte/entradas', verificarToken, async (req, res) => {
     
     try { 
         let datos = (await pool.query(query, params)).rows;
-        // BLINDAJE: Limpiamos los costos si no es Master ni Administrador o Consulta
         if (!['Master', 'Administrador', 'Consulta'].includes(req.user.rol)) {
             datos = datos.map(({ costo_unitario, ...resto }) => resto);
         }
@@ -533,8 +536,7 @@ app.get('/api/reporte/salidas', verificarToken, async (req, res) => {
     
     try { 
         let datos = (await pool.query(query, params)).rows;
-        // BLINDAJE: Limpiamos los costos si no es Master ni Administrador
-        if (!['Master', 'Administrador'].includes(req.user.rol)) {
+        if (!['Master', 'Administrador', 'Consulta'].includes(req.user.rol)) {
             datos = datos.map(({ costo_unitario, ...resto }) => resto);
         }
         res.json(datos); 
@@ -548,8 +550,6 @@ app.post('/api/cargar-masiva/:tipo', verificarToken, verificarRol(['Master', 'Ad
     const { tipo } = req.params; 
     const workbook = xlsx.readFile(req.file.path); 
     const sheet = workbook.Sheets[workbook.SheetNames[0]]; 
-    
-    // raw: false obliga a que la librería lea la fecha tal cual se ve en la celda de Excel (ej: "20/08/2026")
     const data = xlsx.utils.sheet_to_json(sheet, { raw: false }); 
     const client = await pool.connect();
     
@@ -563,36 +563,105 @@ app.post('/api/cargar-masiva/:tipo', verificarToken, verificarRol(['Master', 'Ad
                 await client.query('INSERT INTO categorias (nombre, almacen) VALUES ($1, $2)', [row.NOMBRE, row.ALMACEN]);
             }
             else if (tipo === 'inventario') {
-                
-                // Lógica de conversión de Fecha (DD/MM/YYYY)
-                let fechaEntrada = new Date().toISOString(); // Si viene vacía, usa la fecha y hora actual
+                let fechaEntrada = new Date().toISOString();
                 if (row.FECHA) {
                     const partes = String(row.FECHA).split('/');
                     if (partes.length === 3) {
                         const dia = partes[0].padStart(2, '0');
                         const mes = partes[1].padStart(2, '0');
                         const anio = partes[2];
-                        
-                        // Le clavamos las 12:00 del mediodía con zona horaria -04:00 para evitar que 
-                        // se reste horas y caiga en el día anterior al guardar en la base de datos
                         fechaEntrada = `${anio}-${mes}-${dia}T12:00:00-04:00`; 
                     }
                 }
-
                 await client.query('INSERT INTO entradas (producto_id, cantidad, costo_unitario, stock_restante, fecha, usuario_id) VALUES ($1, $2, $3, $4, $5, $6)', 
                     [row.PRODUCTO_ID, row.CANTIDAD, row.COSTO, row.CANTIDAD, fechaEntrada, req.user.id]);
-                
-                await client.query('UPDATE productos SET stock_actual = stock_actual + $1 WHERE id = $2', 
-                    [row.CANTIDAD, row.PRODUCTO_ID]);
+                await client.query('UPDATE productos SET stock_actual = stock_actual + $1 WHERE id = $2', [row.CANTIDAD, row.PRODUCTO_ID]);
             }
         }
         await client.query('COMMIT'); res.json({ mensaje: `Carga masiva de ${tipo} completada` });
-    } catch (e) { 
-        await client.query('ROLLBACK'); 
-        res.status(500).json({ error: e.message }); 
-    } finally { 
-        client.release(); 
-    }
+    } catch (e) { await client.query('ROLLBACK'); res.status(500).json({ error: e.message }); } finally { client.release(); }
+});
+
+// ==========================================
+// EXCEL DE STOCK (DESCARGA DESDE DASHBOARD) (CON FORMATO Y 200 OK PARA RENDER)
+// ==========================================
+app.get('/api/reporte/descargar-stock', verificarToken, async (req, res) => {
+    const { producto, categoria, almacen } = req.query;
+    try {
+        const userQuery = await pool.query('SELECT nombre, rol FROM usuarios WHERE id = $1', [req.user.id]);
+        const userName = userQuery.rows.length > 0 ? userQuery.rows[0].nombre : 'Usuario Sistema';
+        const userRol = userQuery.rows.length > 0 ? userQuery.rows[0].rol : 'Operario';
+        const puedeVerCostos = ['Master', 'Administrador', 'Consulta'].includes(userRol);
+
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Stock de Inventario');
+        
+        let cols = [
+            { header: 'Lote ID', key: 'id_lote', width: 12 }, { header: 'SKU', key: 'sku', width: 15 },
+            { header: 'Producto', key: 'producto_nombre', width: 35 }, { header: 'Categoría', key: 'categoria_nombre', width: 25 },
+            { header: 'Almacén', key: 'almacen', width: 20 }, { header: 'Stock', key: 'stock_restante', width: 15 },
+            { header: 'Unidad', key: 'unidad_medida', width: 10 }
+        ];
+
+        if (puedeVerCostos) {
+            cols.push({ header: 'Costo Unit. ($)', key: 'costo_unitario', width: 15 }, { header: 'Costo Total ($)', key: 'costo_total', width: 18 });
+        }
+        worksheet.columns = cols;
+
+        worksheet.spliceRows(1, 0, [], [], [], []); 
+        const fechaActual = new Date().toLocaleString('es-VE', { timeZone: 'America/Caracas' });
+        const lastCol = puedeVerCostos ? 'I' : 'G'; 
+
+        worksheet.getCell('A1').value = 'REPORTE DE EXISTENCIAS (STOCK ACTUAL)';
+        worksheet.getCell('A1').font = { size: 14, bold: true, color: { argb: 'FF1E40AF' } };
+
+        worksheet.mergeCells(`A2:${lastCol}2`);
+        const cellFecha = worksheet.getCell('A2');
+        cellFecha.value = `Fecha de emisión: ${fechaActual}`;
+        cellFecha.font = { bold: true };
+        cellFecha.alignment = { horizontal: 'right', vertical: 'middle' };
+
+        worksheet.mergeCells(`A3:${lastCol}3`);
+        const cellUsuario = worksheet.getCell('A3');
+        cellUsuario.value = `Generado por: ${userName}`;
+        cellUsuario.alignment = { horizontal: 'right', vertical: 'middle' };
+
+        const headerRow = worksheet.getRow(5);
+        headerRow.eachCell({ includeEmpty: false }, (cell) => { 
+            cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }; 
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } }; 
+            cell.alignment = { vertical: 'middle', horizontal: 'center' }; 
+        });
+
+        let query = `SELECT e.id, p.sku, p.nombre AS producto_nombre, p.unidad_medida, c.nombre AS categoria_nombre, c.almacen, e.stock_restante, e.costo_unitario 
+                     FROM entradas e JOIN productos p ON e.producto_id = p.id LEFT JOIN categorias c ON p.categoria_id = c.id WHERE e.stock_restante > 0`;
+        let params = []; let paramIndex = 1;
+
+        if (producto) { query += ` AND p.id = $${paramIndex++}`; params.push(producto); }
+        if (categoria) { query += ` AND c.id = $${paramIndex++}`; params.push(categoria); }
+        if (almacen) { query += ` AND c.almacen = $${paramIndex++}`; params.push(almacen); }
+        query += ` ORDER BY p.nombre ASC, e.fecha ASC`;
+
+        const resultado = await pool.query(query, params);
+        resultado.rows.forEach(r => {
+            let fila = { ...r, id_lote: `LOT-${String(r.id).padStart(3, '0')}`, stock_restante: parseFloat(r.stock_restante) };
+            if (puedeVerCostos) {
+                fila.costo_unitario = parseFloat(r.costo_unitario) || 0;
+                fila.costo_total = fila.stock_restante * fila.costo_unitario;
+            }
+            const newRow = worksheet.addRow(fila);
+            newRow.getCell('stock_restante').numFmt = '#,##0.00';
+            if (puedeVerCostos) {
+                newRow.getCell('costo_unitario').numFmt = '"$"#,##0.00';
+                newRow.getCell('costo_total').numFmt = '"$"#,##0.00';
+            }
+        });
+
+        res.status(200);
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="Stock_Inventario.xlsx"`);
+        await workbook.xlsx.write(res); res.end();
+    } catch (error) { console.error("Error al generar Excel de stock:", error); res.status(500).json({ error: 'Error al generar Excel' }); }
 });
 
 app.listen(PORT, () => console.log(`Servidor activo en puerto ${PORT}`));

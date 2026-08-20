@@ -119,18 +119,28 @@ app.get('/api/usuarios', verificarToken, verificarRol(['Master']), async (req, r
     try { res.json((await pool.query('SELECT id, nombre, usuario, rol FROM usuarios ORDER BY nombre ASC')).rows); } 
     catch (error) { res.status(500).json({ error: 'Error al consultar usuarios' }); }
 });
+
 app.put('/api/usuarios/:id', verificarToken, verificarRol(['Master']), async (req, res) => {
-    const { nombre, rol, password } = req.body;
+    const { nombre, usuario, rol, password } = req.body;
     try {
         if (password && password.trim() !== "") {
             const hash = await bcrypt.hash(password, 10);
-            await pool.query('UPDATE usuarios SET nombre=$1, rol=$2, password=$3 WHERE id=$4', [nombre, rol, hash, req.params.id]);
+            await pool.query('UPDATE usuarios SET nombre=$1, usuario=$2, rol=$3, password=$4 WHERE id=$5', [nombre, usuario, rol, hash, req.params.id]);
         } else {
-            await pool.query('UPDATE usuarios SET nombre=$1, rol=$2 WHERE id=$3', [nombre, rol, req.params.id]);
+            await pool.query('UPDATE usuarios SET nombre=$1, usuario=$2, rol=$3 WHERE id=$4', [nombre, usuario, rol, req.params.id]);
         }
         res.json({ mensaje: 'Perfil actualizado exitosamente' });
     } catch (error) { res.status(500).json({ error: 'Error al actualizar usuario' }); }
 });
+
+app.delete('/api/usuarios/:id', verificarToken, verificarRol(['Master']), async (req, res) => {
+    try {
+        if (req.params.id == req.user.id) return res.status(400).json({ error: 'No puedes borrar tu propio usuario' });
+        await pool.query('DELETE FROM usuarios WHERE id = $1', [req.params.id]);
+        res.json({ mensaje: 'Usuario eliminado correctamente' });
+    } catch (error) { res.status(500).json({ error: 'Error al borrar usuario' }); }
+});
+
 // ==========================================
 // ALMACENES Y CATEGORÍAS
 // ==========================================
@@ -405,7 +415,7 @@ app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => 
         worksheet.getCell('G2').alignment = { horizontal: 'right' };
         worksheet.getCell('G2').font = { size: 9 };
 
-      // 7. Estilos de la cabecera de la tabla (Ahora es la fila 5) - SOLO CELDAS ACTIVAS
+        // 7. Estilos de la cabecera de la tabla (Ahora es la fila 5) - SOLO CELDAS ACTIVAS
         const headerRow = worksheet.getRow(5);
         headerRow.eachCell({ includeEmpty: false }, (cell) => {
             cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
@@ -413,12 +423,12 @@ app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => 
             cell.alignment = { vertical: 'middle', horizontal: 'center' };
         });
         worksheet.autoFilter = { from: 'A5', to: 'I5' }; // Filtros activos en la cabecera
-        
+
         // ==========================================
         // INSERTAR Y FORMATEAR DATOS
         // ==========================================
         const resultado = await pool.query(query, [fechaInicio, fechaFin]);
-        
+
         resultado.rows.forEach(r => {
             const cantidad = parseFloat(r.cantidad);
             const costoUnit = parseFloat(r.costo_unitario) || 0;
@@ -445,6 +455,7 @@ app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => 
         await workbook.xlsx.write(res); res.end();
     } catch (error) { res.status(500).json({ error: 'Error al generar Excel: ' + error.message }); }
 });
+
 // ==========================================
 // REPORTES HISTÓRICOS (JSON PARA LAS TABLAS EN PANTALLA)
 // ==========================================
@@ -496,6 +507,7 @@ app.get('/api/reporte/logs', verificarToken, verificarRol(['Master', 'Administra
         res.status(500).json({ error: 'Error al consultar auditoría' }); 
     }
 });
+
 // ==========================================
 // CARGA MASIVA EXCEL
 // ==========================================

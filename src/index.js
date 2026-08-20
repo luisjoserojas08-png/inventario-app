@@ -216,7 +216,7 @@ app.delete('/api/centros-costo/:id', verificarToken, verificarRol(['Master', 'Ad
 // ==========================================
 // PRODUCTOS Y DASHBOARD
 // ==========================================
-app.post('/api/productos', verificarToken, verificarRol(['Master', 'Administrador', 'Operario']), async (req, res) => {
+app.post('/api/productos', verificarToken, verificarRol(['Master', 'Administrador']), async (req, res) => {
     try {
         const query = `INSERT INTO productos (sku, nombre, categoria_id, unidad_medida, stock_actual, stock_minimo, precio_costo) VALUES ($1, $2, $3, $4, 0, 5, 0) RETURNING *`;
         const resultado = await pool.query(query, [req.body.sku, req.body.nombre, req.body.categoria_id, req.body.unidad_medida]);
@@ -224,7 +224,7 @@ app.post('/api/productos', verificarToken, verificarRol(['Master', 'Administrado
     } catch (error) { res.status(500).json({ error: 'Error al crear producto' }); }
 });
 
-app.put('/api/productos/:id', verificarToken, verificarRol(['Master', 'Administrador', 'Operario']), async (req, res) => {
+app.put('/api/productos/:id', verificarToken, verificarRol(['Master', 'Administrador']), async (req, res) => {
     try {
         await pool.query('UPDATE productos SET sku = $1, nombre = $2, categoria_id = $3, unidad_medida = $4 WHERE id = $5', 
             [req.body.sku, req.body.nombre, req.body.categoria_id, req.body.unidad_medida, req.params.id]);
@@ -232,6 +232,7 @@ app.put('/api/productos/:id', verificarToken, verificarRol(['Master', 'Administr
     } catch (error) { res.status(500).json({ error: 'Error al actualizar producto' }); }
 });
 
+// El GET (Lectura) sí se queda para todos, porque el Operario necesita ver la lista de productos para dar entradas/salidas
 app.get('/api/productos', verificarToken, async (req, res) => {
     try { 
         const query = `SELECT p.id, p.sku, p.nombre, p.unidad_medida, p.categoria_id, c.nombre AS categoria_nombre, 
@@ -336,17 +337,9 @@ app.post('/api/salidas', verificarToken, verificarRol(['Master', 'Administrador'
 });
 
 // ==========================================
-// MÓDULO DE COSTEO
+// MÓDULO DE COSTEO (Solo Master y Admin)
 // ==========================================
-app.get('/api/costeo/lotes', verificarToken, async (req, res) => {
-    try {
-        const query = `SELECT e.id, p.sku, p.nombre, p.unidad_medida, e.cantidad, e.costo_unitario, e.fecha, e.nro_documento 
-                       FROM entradas e JOIN productos p ON e.producto_id = p.id ORDER BY e.fecha DESC`;
-        res.json((await pool.query(query)).rows);
-    } catch (error) { res.status(500).json({ error: 'Error al consultar lotes' }); }
-});
-
-app.put('/api/costeo/lotes/:id', verificarToken, verificarRol(['Master', 'Administrador', 'Operario']), async (req, res) => {
+app.put('/api/costeo/lotes/:id', verificarToken, verificarRol(['Master', 'Administrador']), async (req, res) => {
     try {
         const nuevoCosto = parseFloat(req.body.costo_unitario);
         await pool.query('UPDATE entradas SET costo_unitario = $1 WHERE id = $2', [nuevoCosto, req.params.id]);

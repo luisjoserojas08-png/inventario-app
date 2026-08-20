@@ -14,18 +14,44 @@
   <script>
     const token = localStorage.getItem('erp_token') || localStorage.getItem('token');
     if (!token) window.location.href = 'login.html';
+    
     function parseJwt(t) { try { return JSON.parse(atob(t.split('.')[1])); } catch (e) { return null; } }
     const currentUser = parseJwt(token);
+    
+    // Variables globales de permisos
+    const isRestricted = currentUser && (currentUser.rol === 'Operario' || currentUser.rol === 'Consulta');
+    const isMaster = currentUser && currentUser.rol === 'Master';
+
+    // Ocultar elementos visuales según el rol al cargar la página
+    document.addEventListener("DOMContentLoaded", () => {
+        if (isRestricted) {
+            // Ocultamos el panel de crear producto (el flex-1 de la tabla hará que ocupe todo el ancho)
+            const panelCrear = document.getElementById('panel-crear-producto');
+            if(panelCrear) panelCrear.classList.add('hidden');
+            
+            // Ocultamos la cabecera de la columna de acciones en la tabla
+            const colAcciones = document.getElementById('col-acciones');
+            if(colAcciones) colAcciones.classList.add('hidden');
+
+            // Ocultamos opciones del menú exclusivas de Admin/Master
+            document.querySelectorAll('.admin-only').forEach(el => el.classList.add('hidden'));
+        }
+
+        // Ocultamos opciones exclusivas del Master (como Gestión de Usuarios)
+        if (!isMaster) {
+            document.querySelectorAll('.master-only').forEach(el => el.classList.add('hidden'));
+        }
+    });
   </script>
 
   <div class="flex h-screen overflow-hidden">
     <!-- Sidebar -->
-    <aside class="w-64 bg-corporate-dark text-slate-300 flex flex-col hidden md:flex">
+    <aside class="w-64 bg-corporate-dark text-slate-300 flex flex-col hidden md:flex shrink-0">
       <div class="p-6 text-xl font-bold text-white tracking-wider border-b border-slate-800">ERP Genética</div>
-                  <nav class="flex-1 p-4 space-y-2 overflow-y-auto">
+      <nav class="flex-1 p-4 space-y-2 overflow-y-auto">
         <a href="index.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📊 Dashboard Inventario</a>
         <a href="costeo.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">💰 Costeo de Existencias</a>
-        <a href="productos.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📦 Maestro de Productos</a>
+        <a href="productos.html" class="block px-4 py-2.5 rounded-lg bg-corporate-primary text-white font-medium shadow-xs">📦 Maestro de Productos</a>
         <a href="entradas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📥 Registro de Compras</a>
         <a href="salidas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📤 Registro de Salidas</a>
         <a href="reportes.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📑 Historial y Reportes</a>
@@ -34,18 +60,19 @@
         <a href="usuarios.html" class="master-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">👥 Gestión de Usuarios</a>
         <a href="auditoria.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🛡️ Auditoría del Sistema</a>
       </nav>
+      <div class="p-4 border-t border-slate-800 text-xs text-slate-500">Sesión Activa</div>
     </aside>
 
     <div class="flex-1 flex flex-col overflow-y-auto">
-      <header class="bg-white border-b h-16 flex items-center justify-between px-8 shadow-xs">
+      <header class="bg-white border-b h-16 flex items-center justify-between px-8 shadow-xs shrink-0">
         <h1 class="text-lg font-semibold text-slate-700">Catálogo Maestro de Productos</h1>
-        <button onclick="localStorage.clear(); window.location.href='login.html'" class="text-sm text-red-600 font-medium bg-red-50 px-3 py-1.5 rounded-lg">Cerrar Sesión</button>
+        <button onclick="localStorage.clear(); window.location.href='login.html'" class="text-sm text-red-600 font-medium bg-red-50 px-3 py-1.5 rounded-lg hover:bg-red-100 transition">Cerrar Sesión</button>
       </header>
 
       <main class="p-8 flex flex-col lg:flex-row gap-8">
         
         <!-- Formulario (Izquierda) -->
-        <div class="w-full lg:w-1/3 bg-white rounded-xl border border-corporate-border p-6 shadow-xs h-fit sticky top-8">
+        <div id="panel-crear-producto" class="w-full lg:w-1/3 bg-white rounded-xl border border-corporate-border p-6 shadow-xs h-fit sticky top-8">
           <h3 class="font-bold text-slate-700 border-b pb-3 mb-5" id="form-titulo">Crear Nuevo Producto</h3>
           <form id="form-producto" class="space-y-4">
             <div>
@@ -78,7 +105,7 @@
         </div>
 
         <!-- Tabla (Derecha) -->
-        <div class="flex-1 bg-white rounded-xl border border-corporate-border shadow-xs overflow-hidden">
+        <div id="panel-tabla-productos" class="flex-1 bg-white rounded-xl border border-corporate-border shadow-xs overflow-hidden">
           <div class="px-6 py-4 border-b bg-slate-50 flex justify-between items-center">
             <h3 class="font-bold text-slate-700">Productos Registrados</h3>
           </div>
@@ -89,8 +116,8 @@
                   <th class="px-6 py-3 bg-slate-50">SKU</th>
                   <th class="px-6 py-3 bg-slate-50">Producto</th>
                   <th class="px-6 py-3 bg-slate-50">Categoría</th>
-                  <th class="px-6 py-3 bg-slate-50">Stock Actual</th>
-                  <th class="px-6 py-3 bg-slate-50 text-right">Acciones</th>
+                  <th class="px-6 py-3 bg-slate-50 text-right">Stock Actual</th>
+                  <th id="col-acciones" class="px-6 py-3 bg-slate-50 text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody id="tabla-productos" class="divide-y text-sm text-slate-600">
@@ -105,10 +132,6 @@
   </div>
 
   <script>
-    if (currentUser && currentUser.rol !== 'Administrador') {
-      document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
-    }
-
     let editandoProductoId = null;
 
     async function cargarCategorias() {
@@ -124,7 +147,8 @@
             const tbody = document.getElementById('tabla-productos');
             
             if (!productos.length) {
-                tbody.innerHTML = `<tr><td colspan="5" class="px-6 py-6 text-center text-slate-400">No hay productos registrados.</td></tr>`;
+                // Ajustamos el colspan dinámicamente si las acciones están ocultas
+                tbody.innerHTML = `<tr><td colspan="${isRestricted ? '4' : '5'}" class="px-6 py-6 text-center text-slate-400">No hay productos registrados.</td></tr>`;
                 return;
             }
 
@@ -132,9 +156,9 @@
                 <tr class="hover:bg-slate-50 transition">
                     <td class="px-6 py-4 font-mono font-bold text-slate-700">${p.sku}</td>
                     <td class="px-6 py-4 font-medium text-slate-800">${p.nombre}</td>
-                    <td class="px-6 py-4">${p.categoria_nombre || 'Sin Categoría'}</td>
-                    <td class="px-6 py-4 font-semibold ${p.stock_actual > 0 ? 'text-emerald-600' : 'text-red-500'}">${Number(p.stock_actual).toFixed(2)} ${p.unidad_medida}</td>
-                    <td class="px-6 py-4 text-right">
+                    <td class="px-6 py-4 text-slate-500">${p.categoria_nombre || 'Sin Categoría'}</td>
+                    <td class="px-6 py-4 font-semibold text-right ${p.stock_actual > 0 ? 'text-emerald-600' : 'text-red-500'}">${Number(p.stock_actual).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} <span class="text-xs font-normal">${p.unidad_medida}</span></td>
+                    <td class="px-6 py-4 text-right ${isRestricted ? 'hidden' : ''}">
                         <button onclick="prepararEdicion(${p.id}, '${p.sku}', '${p.nombre.replace(/'/g, "\\'")}', '${p.unidad_medida}', ${p.categoria_id})" class="text-amber-600 hover:text-amber-800 font-medium text-sm bg-amber-50 px-3 py-1 rounded-md">✏️ Editar</button>
                     </td>
                 </tr>
@@ -167,33 +191,36 @@
         document.getElementById('btn-cancelar').classList.add('hidden');
     };
 
-    document.getElementById('form-producto').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const msg = document.getElementById('msg-producto');
-        const url = editandoProductoId ? `/api/productos/${editandoProductoId}` : '/api/productos';
-        const method = editandoProductoId ? 'PUT' : 'POST';
+    // Solo asociamos el evento submit si el formulario no está oculto (por seguridad adicional frontend)
+    if (!isRestricted) {
+        document.getElementById('form-producto').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const msg = document.getElementById('msg-producto');
+            const url = editandoProductoId ? `/api/productos/${editandoProductoId}` : '/api/productos';
+            const method = editandoProductoId ? 'PUT' : 'POST';
 
-        try {
-            const res = await fetch(url, {
-                method: method,
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({
-                    sku: document.getElementById('sku').value,
-                    nombre: document.getElementById('nombre-prod').value,
-                    unidad_medida: document.getElementById('unidad_medida').value,
-                    categoria_id: document.getElementById('categoria_id').value
-                })
-            });
-            const data = await res.json();
-            msg.className = `px-4 py-3 rounded-lg text-sm font-medium block mt-4 ${res.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`;
-            msg.textContent = res.ok ? `✅ ${data.mensaje || 'Operación exitosa'}` : `❌ ${data.error}`;
-            
-            if(res.ok) { 
-                cancelarEdicion();
-                cargarProductos(); 
-            }
-        } catch (error) { console.error(error); }
-    });
+            try {
+                const res = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({
+                        sku: document.getElementById('sku').value,
+                        nombre: document.getElementById('nombre-prod').value,
+                        unidad_medida: document.getElementById('unidad_medida').value,
+                        categoria_id: document.getElementById('categoria_id').value
+                    })
+                });
+                const data = await res.json();
+                msg.className = `px-4 py-3 rounded-lg text-sm font-medium block mt-4 ${res.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`;
+                msg.textContent = res.ok ? `✅ ${data.mensaje || 'Operación exitosa'}` : `❌ ${data.error}`;
+                
+                if(res.ok) { 
+                    cancelarEdicion();
+                    cargarProductos(); 
+                }
+            } catch (error) { console.error(error); }
+        });
+    }
 
     cargarCategorias();
     cargarProductos();

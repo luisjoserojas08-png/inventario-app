@@ -113,7 +113,6 @@
   <script>
     let vistaActual = 'entradas';
 
-    // 1. Obtiene las listas de la base de datos para llenar los <select>
     async function cargarFiltrosListas() {
         try {
             const reqOpciones = { headers: { 'Authorization': `Bearer ${token}` } };
@@ -128,25 +127,30 @@
             const productos = await prodRes.json();
 
             const selAlm = document.getElementById('filtro-almacen');
-            almacenes.forEach(a => selAlm.innerHTML += `<option value="${a.nombre}">${a.nombre}</option>`);
+            if (selAlm && Array.isArray(almacenes)) {
+                almacenes.forEach(a => selAlm.innerHTML += `<option value="${a.nombre}">${a.nombre}</option>`);
+            }
             
             const selCat = document.getElementById('filtro-categoria');
-            categorias.forEach(c => selCat.innerHTML += `<option value="${c.id}">${c.nombre}</option>`);
+            if (selCat && Array.isArray(categorias)) {
+                categorias.forEach(c => selCat.innerHTML += `<option value="${c.id}">${c.nombre}</option>`);
+            }
 
             const selProd = document.getElementById('filtro-producto');
-            productos.forEach(p => selProd.innerHTML += `<option value="${p.id}">${p.nombre} (SKU: ${p.sku})</option>`);
+            if (selProd && Array.isArray(productos)) {
+                productos.forEach(p => selProd.innerHTML += `<option value="${p.id}">${p.nombre} (SKU: ${p.sku})</option>`);
+            }
         } catch (error) { console.error("Error cargando filtros:", error); }
     }
 
-    // 2. Construye la URL con todos los filtros elegidos
     function construirUrlFiltros(basePath) {
-        const inicio = document.getElementById('fecha-inicio').value;
-        const fin = document.getElementById('fecha-fin').value;
-        const almacen = document.getElementById('filtro-almacen').value;
-        const categoria = document.getElementById('filtro-categoria').value;
-        const producto = document.getElementById('filtro-producto').value;
+        const inicio = document.getElementById('fecha-inicio')?.value || '';
+        const fin = document.getElementById('fecha-fin')?.value || '';
+        const almacen = document.getElementById('filtro-almacen')?.value || '';
+        const categoria = document.getElementById('filtro-categoria')?.value || '';
+        const producto = document.getElementById('filtro-producto')?.value || '';
         
-        let url = `${basePath}?v=1`; // Parámetro dummy para iniciar el query string
+        let url = `${basePath}?v=1`; 
         if (inicio && fin) url += `&inicio=${inicio}&fin=${fin}`;
         if (almacen) url += `&almacen=${encodeURIComponent(almacen)}`;
         if (categoria) url += `&categoria=${categoria}`;
@@ -170,17 +174,28 @@
       cargarDatos();
     }
 
-   async function cargarDatos() {
+    async function cargarDatos() {
       const url = construirUrlFiltros(`/api/reporte/${vistaActual}`);
       const tbody = document.getElementById('tabla-cuerpo');
       const thead = document.getElementById('tabla-cabecera');
       
+      if (!tbody || !thead) return;
+
+      tbody.innerHTML = `<tr><td colspan="7" class="text-center py-6 text-slate-400">Cargando datos...</td></tr>`;
+
       try {
         const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+        if (!res.ok) throw new Error("Error en la respuesta del servidor");
         const data = await res.json();
 
         if (vistaActual === 'entradas') {
           thead.innerHTML = `<th class="px-6 py-3">Lote ID</th><th class="px-6 py-3">Producto</th><th class="px-6 py-3">Almacén</th><th class="px-6 py-3">Cantidad</th><th class="px-6 py-3">Costo Unit.</th><th class="px-6 py-3">Fecha</th>`;
+          
+          if (data.length === 0) {
+              tbody.innerHTML = `<tr><td colspan="6" class="text-center py-6 text-slate-400">No se encontraron registros con los filtros seleccionados.</td></tr>`;
+              return;
+          }
+
           tbody.innerHTML = data.map(item => `
             <tr class="hover:bg-slate-50">
               <td class="px-6 py-4 font-mono font-bold text-blue-600">LOT-${String(item.id).padStart(3, '0')}</td>
@@ -191,7 +206,13 @@
               <td class="px-6 py-4 text-xs text-slate-500">${new Date(item.fecha).toLocaleString('es-VE')}</td>
             </tr>`).join('');
         } else {
-         thead.innerHTML = `<th class="px-6 py-3">Ref ID</th><th class="px-6 py-3">Lote Origen</th><th class="px-6 py-3">Producto</th><th class="px-6 py-3">Almacén</th><th class="px-6 py-3">Cantidad</th><th class="px-6 py-3">Concepto</th><th class="px-6 py-3">Fecha</th>`;
+          thead.innerHTML = `<th class="px-6 py-3">Ref ID</th><th class="px-6 py-3">Lote Origen</th><th class="px-6 py-3">Producto</th><th class="px-6 py-3">Almacén</th><th class="px-6 py-3">Cantidad</th><th class="px-6 py-3">Concepto</th><th class="px-6 py-3">Fecha</th>`;
+          
+          if (data.length === 0) {
+              tbody.innerHTML = `<tr><td colspan="7" class="text-center py-6 text-slate-400">No se encontraron registros con los filtros seleccionados.</td></tr>`;
+              return;
+          }
+
           tbody.innerHTML = data.map(item => `
             <tr class="hover:bg-slate-50">
               <td class="px-6 py-4 font-mono font-bold text-red-600">SAL-${String(item.id).padStart(3, '0')}</td>
@@ -203,11 +224,13 @@
               <td class="px-6 py-4 text-xs text-slate-500">${new Date(item.fecha).toLocaleString('es-VE')}</td>
             </tr>`).join('');
         }
-      } catch (e) { tbody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-red-500">Error al cargar datos.</td></tr>`; }
+      } catch (e) { 
+          console.error(e);
+          tbody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-red-500">Error al cargar datos desde el servidor.</td></tr>`; 
+      }
     } 
 
     async function descargarHistorialFiltrado() {
-      // Usa la misma función central de URL pero apuntando al endpoint de Excel
       const url = construirUrlFiltros(`/api/reporte/descargar-historial`);
       const urlExcel = url + `&tipo=${vistaActual}`;
 

@@ -212,10 +212,33 @@ app.get('/api/productos', verificarToken, async (req, res) => {
     } catch (e) { res.status(500).json({ error: 'Error' }); }
 });
 
+// DASHBOARD: Lotes con Filtros Avanzados
 app.get('/api/inventario-lotes', verificarToken, async (req, res) => {
+    const { producto, categoria, almacen } = req.query;
     try {
-        const query = `SELECT e.id AS lote_id, p.sku, p.nombre, p.unidad_medida, c.nombre AS categoria_nombre, c.almacen, e.stock_restante, e.costo_unitario FROM entradas e JOIN productos p ON e.producto_id = p.id LEFT JOIN categorias c ON p.categoria_id = c.id WHERE e.stock_restante > 0 ORDER BY p.nombre ASC, e.fecha ASC;`;
-        res.json((await pool.query(query)).rows);
+        let query = `SELECT e.id AS lote_id, p.id AS producto_id, p.sku, p.nombre, p.unidad_medida, c.id AS categoria_id, c.nombre AS categoria_nombre, c.almacen, e.stock_restante, e.costo_unitario 
+                     FROM entradas e 
+                     JOIN productos p ON e.producto_id = p.id 
+                     LEFT JOIN categorias c ON p.categoria_id = c.id 
+                     WHERE e.stock_restante > 0`;
+        let params = [];
+        let paramIndex = 1;
+
+        if (producto) {
+            query += ` AND p.id = $${paramIndex++}`;
+            params.push(producto);
+        }
+        if (categoria) {
+            query += ` AND c.id = $${paramIndex++}`;
+            params.push(categoria);
+        }
+        if (almacen) {
+            query += ` AND c.almacen = $${paramIndex++}`;
+            params.push(almacen);
+        }
+
+        query += ` ORDER BY p.nombre ASC, e.fecha ASC;`;
+        res.json((await pool.query(query, params)).rows);
     } catch (error) { res.status(500).json({ error: 'Error al consultar el inventario' }); }
 });
 
@@ -354,12 +377,11 @@ app.delete('/api/admin/movimientos/:tipo/:id', verificarToken, verificarRol(['Ma
 });
 
 // ==========================================
-// REPORTES HISTÓRICOS Y EXCEL CON FILTROS (LECTURA PARA TODOS)
+// EXCEL DE REPORTES (CON FORMATO CONTABLE)
 // ==========================================
 app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => {
     const { tipo, inicio, fin } = req.query;
     try {
-        // 1. Obtener el nombre real del usuario que hace la descarga para la auditoría
         const userQuery = await pool.query('SELECT nombre FROM usuarios WHERE id = $1', [req.user.id]);
         const userName = userQuery.rows.length > 0 ? userQuery.rows[0].nombre : 'Usuario Sistema';
 
@@ -370,13 +392,11 @@ app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => 
         const fechaInicio = inicio ? new Date(inicio + 'T00:00:00') : new Date('2000-01-01'); 
         const fechaFin = fin ? new Date(`${fin}T23:59:59.999Z`) : new Date();
 
-        // 2. Dar formato a las fechas para el título (DD/MM/YYYY)
         let fechaInicioStr = 'INICIO';
         let fechaFinStr = 'ACTUALIDAD';
         if (inicio) { const [y, m, d] = inicio.split('-'); fechaInicioStr = `${d}/${m}/${y}`; }
         if (fin) { const [y, m, d] = fin.split('-'); fechaFinStr = `${d}/${m}/${y}`; }
 
-        // 3. Configurar las columnas (Se definen primero, luego las bajaremos)
         if (tipo === 'entradas') {
             worksheet.columns = [ 
                 { header: 'Lote', key: 'id_lote', width: 12 }, { header: 'SKU', key: 'sku', width: 15 }, 
@@ -401,14 +421,8 @@ app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => 
                      WHERE s.fecha >= $1 AND s.fecha <= $2 ORDER BY s.fecha DESC`;
         }
 
-        // ==========================================
-        // DISEÑO DEL ENCABEZADO PROFESIONAL
-        // ==========================================
-        
-        // 4. Bajar la tabla 4 filas para hacer espacio para el encabezado
         worksheet.spliceRows(1, 0, [], [], [], []);
 
-        // 5. Título Principal y Subtítulo (Izquierda)
         const tituloReporte = `HISTORIAL DE ${tipo.toUpperCase()} (DESDE ${fechaInicioStr} HASTA ${fechaFinStr})`;
         const subtitulo = tipo === 'entradas' 
             ? 'Imputación contable de ingresos al almacén y su valorización' 
@@ -417,15 +431,14 @@ app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => 
         worksheet.mergeCells('A1:F1');
         const titleCell = worksheet.getCell('A1');
         titleCell.value = tituloReporte;
-        titleCell.font = { size: 13, bold: true, color: { argb: 'FF1E40AF' } }; // Azul oscuro
+        titleCell.font = { size: 13, bold: true, color: { argb: 'FF1E40AF' } };
         titleCell.alignment = { vertical: 'middle', horizontal: 'left' };
 
         worksheet.mergeCells('A2:F2');
         const subCell = worksheet.getCell('A2');
         subCell.value = subtitulo;
-        subCell.font = { size: 10, italic: true, color: { argb: 'FF475569' } }; // Gris oscuro
+        subCell.font = { size: 10, italic: true, color: { argb: 'FF475569' } };
 
-        // 6. Datos de Auditoría (Derecha Superior)
         const fechaActual = new Date().toLocaleDateString('es-VE', { timeZone: 'America/Caracas' });
         const horaActual = new Date().toLocaleTimeString('es-VE', { timeZone: 'America/Caracas', hour12: true });
 
@@ -439,24 +452,20 @@ app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => 
         worksheet.getCell('G2').alignment = { horizontal: 'right' };
         worksheet.getCell('G2').font = { size: 9 };
 
-        // 7. Estilos de la cabecera de la tabla (Ahora es la fila 5) - SOLO CELDAS ACTIVAS
         const headerRow = worksheet.getRow(5);
         headerRow.eachCell({ includeEmpty: false }, (cell) => {
             cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } };
             cell.alignment = { vertical: 'middle', horizontal: 'center' };
         });
-        worksheet.autoFilter = { from: 'A5', to: 'I5' }; // Filtros activos en la cabecera
+        worksheet.autoFilter = { from: 'A5', to: 'I5' };
 
-        // ==========================================
-        // INSERTAR Y FORMATEAR DATOS
-        // ==========================================
         const resultado = await pool.query(query, [fechaInicio, fechaFin]);
 
         resultado.rows.forEach(r => {
             const cantidad = parseFloat(r.cantidad);
             const costoUnit = parseFloat(r.costo_unitario) || 0;
-            const costoTotal = (cantidad * costoUnit); // Lo mandamos como Number para que Excel lo sume
+            const costoTotal = (cantidad * costoUnit);
             
             const newRow = worksheet.addRow({ 
                 ...r, 
@@ -468,7 +477,6 @@ app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => 
                 fecha: new Date(r.fecha).toLocaleString('es-VE', { timeZone: 'America/Caracas' }) 
             });
 
-            // Darle formato contable nativo de Excel a los números y dólares
             newRow.getCell('cantidad').numFmt = '#,##0.00';
             newRow.getCell('costo_unitario').numFmt = '"$"#,##0.00';
             newRow.getCell('costo_total').numFmt = '"$"#,##0.00';
@@ -481,19 +489,34 @@ app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => 
 });
 
 // ==========================================
-// REPORTES HISTÓRICOS (JSON PARA LAS TABLAS EN PANTALLA)
+// REPORTES HISTÓRICOS (JSON PARA LAS TABLAS CON FILTROS)
 // ==========================================
 app.get('/api/reporte/entradas', verificarToken, async (req, res) => {
-    const { inicio, fin } = req.query;
+    const { inicio, fin, producto, categoria, almacen } = req.query;
     let query = `SELECT e.id, p.sku, p.nombre AS producto_nombre, p.unidad_medida, c.almacen, e.cantidad, e.costo_unitario, e.fecha 
                  FROM entradas e 
                  JOIN productos p ON e.producto_id = p.id 
-                 LEFT JOIN categorias c ON p.categoria_id = c.id`;
+                 LEFT JOIN categorias c ON p.categoria_id = c.id WHERE 1=1`;
     let params = [];
+    let paramIndex = 1;
+
     if (inicio && fin) {
-        query += ` WHERE e.fecha >= $1 AND e.fecha <= $2`;
+        query += ` AND e.fecha >= $${paramIndex++} AND e.fecha <= $${paramIndex++}`;
         params.push(new Date(inicio), new Date(`${fin}T23:59:59.999Z`));
     }
+    if (producto) {
+        query += ` AND p.id = $${paramIndex++}`;
+        params.push(producto);
+    }
+    if (categoria) {
+        query += ` AND p.categoria_id = $${paramIndex++}`;
+        params.push(categoria);
+    }
+    if (almacen) {
+        query += ` AND c.almacen = $${paramIndex++}`;
+        params.push(almacen);
+    }
+
     query += ` ORDER BY e.fecha DESC;`;
     
     try { 
@@ -504,16 +527,31 @@ app.get('/api/reporte/entradas', verificarToken, async (req, res) => {
 });
 
 app.get('/api/reporte/salidas', verificarToken, async (req, res) => {
-    const { inicio, fin } = req.query;
+    const { inicio, fin, producto, categoria, almacen } = req.query;
     let query = `SELECT s.id, p.sku, p.nombre AS producto_nombre, p.unidad_medida, c.almacen, s.cantidad, s.concepto, s.fecha, s.lote_origen_id 
                  FROM salidas s 
                  JOIN productos p ON s.producto_id = p.id 
-                 LEFT JOIN categorias c ON p.categoria_id = c.id`;
+                 LEFT JOIN categorias c ON p.categoria_id = c.id WHERE 1=1`;
     let params = [];
+    let paramIndex = 1;
+
     if (inicio && fin) {
-        query += ` WHERE s.fecha >= $1 AND s.fecha <= $2`;
+        query += ` AND s.fecha >= $${paramIndex++} AND s.fecha <= $${paramIndex++}`;
         params.push(new Date(inicio), new Date(`${fin}T23:59:59.999Z`));
     }
+    if (producto) {
+        query += ` AND p.id = $${paramIndex++}`;
+        params.push(producto);
+    }
+    if (categoria) {
+        query += ` AND p.categoria_id = $${paramIndex++}`;
+        params.push(categoria);
+    }
+    if (almacen) {
+        query += ` AND c.almacen = $${paramIndex++}`;
+        params.push(almacen);
+    }
+
     query += ` ORDER BY s.fecha DESC;`;
     
     try { 

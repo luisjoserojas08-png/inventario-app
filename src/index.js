@@ -405,13 +405,15 @@ app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => 
         worksheet.getCell('G2').alignment = { horizontal: 'right' };
         worksheet.getCell('G2').font = { size: 9 };
 
-        // 7. Estilos de la cabecera de la tabla (Ahora es la fila 5)
+      // 7. Estilos de la cabecera de la tabla (Ahora es la fila 5) - SOLO CELDAS ACTIVAS
         const headerRow = worksheet.getRow(5);
-        headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-        headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } };
-        headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+        headerRow.eachCell({ includeEmpty: false }, (cell) => {
+            cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } };
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+        });
         worksheet.autoFilter = { from: 'A5', to: 'I5' }; // Filtros activos en la cabecera
-
+        
         // ==========================================
         // INSERTAR Y FORMATEAR DATOS
         // ==========================================

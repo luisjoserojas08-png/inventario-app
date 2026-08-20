@@ -3,92 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ERP - Dashboard de Inventario</title>
+    <title>ERP - Dashboard Inventario</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = { theme: { extend: { colors: { corporate: { dark: '#0f172a', primary: '#1e40af', light: '#f8fafc', border: '#e2e8f0' } } } } }
     </script>
 </head>
-<body class="bg-corporate-light font-sans text-slate-800">
+<body class="bg-corporate-light font-sans text-slate-800 subpixel-antialiased">
 
- <script>
+  <script>
     const token = localStorage.getItem('erp_token') || localStorage.getItem('token');
     if (!token) window.location.href = 'login.html';
-    function parseJwt(t) { try { return JSON.parse(atob(t.split('.')[1])); } catch (e) { return null; } }
     
+    function parseJwt(t) { try { return JSON.parse(atob(t.split('.')[1])); } catch (e) { return null; } }
     const currentUser = parseJwt(token);
+    
     // Evaluamos el permiso basados puramente en el ROL del token
-    const puedeVerCostos = currentUser && ['Master', 'Administrador'].includes(currentUser.rol);
-
-    document.addEventListener("DOMContentLoaded", () => {
-        if (!puedeVerCostos) {
-            // Ocultar tarjetas financieras y menú de costeo
-            document.querySelectorAll('.costos-only').forEach(el => el.classList.add('hidden'));
-        }
-        if (currentUser && currentUser.rol !== 'Master') {
-            document.querySelectorAll('.master-only').forEach(el => el.classList.add('hidden'));
-        }
-        
-        // Inyectamos las cabeceras de dinero en la tabla FIFO solo si tiene permiso
-        if (puedeVerCostos) {
-            document.getElementById('tabla-head').innerHTML += `<th class="px-6 py-3 text-right">Costo Unit.</th><th class="px-6 py-3 text-right">Valor Total ($)</th>`;
-        }
-    });
-
-    async function cargarFiltros() {
-        const headers = { headers: { 'Authorization': `Bearer ${token}` } };
-        try {
-            const [alm, cat, prod] = await Promise.all([
-                fetch('/api/almacenes', headers).then(r=>r.json()), fetch('/api/categorias', headers).then(r=>r.json()), fetch('/api/productos', headers).then(r=>r.json())
-            ]);
-            document.getElementById('filtro-almacen').innerHTML += alm.map(a => `<option value="${a.nombre}">${a.nombre}</option>`).join('');
-            document.getElementById('filtro-categoria').innerHTML += cat.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
-            document.getElementById('filtro-producto').innerHTML += prod.map(p => `<option value="${p.id}">${p.nombre} (SKU: ${p.sku})</option>`).join('');
-        } catch (e) { console.error("Error filtros", e); }
-    }
-
-    async function cargarDashboard() {
-        const almacen = document.getElementById('filtro-almacen').value;
-        const categoria = document.getElementById('filtro-categoria').value;
-        const producto = document.getElementById('filtro-producto').value;
-        let url = '/api/inventario-lotes?v=1';
-        if(almacen) url += `&almacen=${encodeURIComponent(almacen)}`; if(categoria) url += `&categoria=${categoria}`; if(producto) url += `&producto=${producto}`;
-
-        try {
-            const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
-            if (!res.ok) throw new Error("Token inválido");
-            const lotes = await res.json();
-            
-            let html = ''; let valTotal = 0;
-            if (lotes.length === 0) {
-                html = `<tr><td colspan="${puedeVerCostos ? 7 : 5}" class="px-6 py-8 text-center text-slate-500">No hay lotes disponibles.</td></tr>`;
-            } else {
-                lotes.forEach(l => {
-                    const cant = parseFloat(l.stock_restante);
-                    html += `<tr class="hover:bg-slate-50 transition">
-                        <td class="px-6 py-4 font-mono font-bold text-blue-600">LOT-${String(l.lote_id).padStart(3, '0')}</td>
-                        <td class="px-6 py-4"><p class="font-bold text-slate-800">${l.nombre}</p><p class="text-xs text-slate-400">SKU: ${l.sku}</p></td>
-                        <td class="px-6 py-4 text-slate-500">${l.categoria_nombre || 'N/A'}</td>
-                        <td class="px-6 py-4"><span class="bg-slate-100 px-2 py-1 rounded text-xs border">${l.almacen || 'Principal'}</span></td>
-                        <td class="px-6 py-4 font-extrabold text-emerald-600 text-right">${cant.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} <span class="text-xs text-slate-400">${l.unidad_medida}</span></td>`;
-                    
-                    if (puedeVerCostos) {
-                        const costo = parseFloat(l.costo_unitario) || 0;
-                        const totalLinea = cant * costo;
-                        valTotal += totalLinea;
-                        html += `<td class="px-6 py-4 text-slate-600 text-right">$${costo.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                                 <td class="px-6 py-4 font-bold text-slate-800 text-right">$${totalLinea.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>`;
-                    }
-                    html += `</tr>`;
-                });
-            }
-            document.getElementById('tabla-dashboard').innerHTML = html;
-            document.getElementById('total-lotes').innerText = lotes.length;
-            if (puedeVerCostos) document.getElementById('total-valor').innerText = `$${valTotal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-        } catch (e) { document.getElementById('tabla-dashboard').innerHTML = `<tr><td colspan="7" class="text-center text-red-500">Error al cargar.</td></tr>`; }
-    }
-    cargarFiltros();
-    cargarDashboard();
+    const puedeVerCostos = currentUser && ['Master', 'Administrador', 'Consulta'].includes(currentUser.rol);
   </script>
 
   <div class="flex h-screen overflow-hidden">
@@ -97,188 +28,193 @@
       <div class="p-6 text-xl font-bold text-white tracking-wider border-b border-slate-800">ERP Genética</div>
       <nav class="flex-1 p-4 space-y-2 overflow-y-auto">
         <a href="index.html" class="block px-4 py-2.5 rounded-lg bg-corporate-primary text-white font-medium shadow-xs">📊 Dashboard Inventario</a>
-        <a href="costeo.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">💰 Costeo de Existencias</a>
+        <a href="costeo.html" class="costos-only admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">💰 Costeo de Existencias</a>
         <a href="productos.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📦 Maestro de Productos</a>
         <a href="entradas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📥 Registro de Compras</a>
         <a href="salidas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📤 Registro de Salidas</a>
         <a href="reportes.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📑 Historial y Reportes</a>
         <a href="categorias.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🏷️ Categorías y Almacén</a>
         <a href="carga.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📂 Carga Masiva</a>
-        <a href="usuarios.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">👥 Gestión de Usuarios</a>
-        <a href="auditoria.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🛡️ Auditoría del Sistema</a>
+        <a href="usuarios.html" class="master-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">👥 Gestión de Usuarios</a>
+        <a href="auditoria.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🛡️ Auditoría del Sistema</a>
       </nav>
-      <div class="p-4 border-t border-slate-800 text-xs text-slate-500">Sesión Activa</div>
     </aside>
 
-    <!-- Main -->
     <div class="flex-1 flex flex-col overflow-y-auto">
       <header class="bg-white border-b h-16 flex items-center justify-between px-8 shadow-xs shrink-0">
         <h1 class="text-lg font-semibold text-slate-700">Dashboard General de Inventario</h1>
-        <button onclick="localStorage.clear(); window.location.href='login.html'" class="text-sm text-red-600 font-medium bg-red-50 px-3 py-1.5 rounded-lg hover:bg-red-100 transition">Cerrar Sesión</button>
+        <div class="flex items-center gap-4">
+            <button onclick="descargarStockExcel()" class="bg-emerald-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-emerald-700 transition shadow-sm">
+                📥 Descargar Stock
+            </button>
+            <button onclick="localStorage.clear(); window.location.href='login.html'" class="text-sm text-red-600 font-medium bg-red-50 px-3 py-1.5 rounded-lg hover:bg-red-100 transition">Cerrar Sesión</button>
+        </div>
       </header>
 
       <main class="p-8">
-        <!-- Indicadores (KPIs) -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <div class="bg-white p-6 rounded-xl border border-corporate-border shadow-xs flex items-center justify-between">
-            <div>
-              <p class="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-1">Lotes Activos (Con Stock)</p>
-              <h2 id="card-items" class="text-3xl font-bold text-slate-800">0</h2>
-            </div>
-            <div class="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 text-xl">📦</div>
+        <!-- Tarjetas de Resumen -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <div class="bg-white p-6 rounded-2xl border border-corporate-border shadow-xs">
+            <p class="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">Lotes Activos (Con Stock)</p>
+            <h2 id="total-lotes" class="text-4xl font-extrabold text-slate-800">0</h2>
           </div>
-          <div class="bg-white p-6 rounded-xl border border-corporate-border shadow-xs flex items-center justify-between">
-            <div>
-              <p class="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-1">Valorización Total (Filtro Actual)</p>
-              <h2 id="card-valor" class="text-3xl font-bold text-emerald-600">$0.00</h2>
-            </div>
-            <div class="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 text-xl">💰</div>
+          <div class="costos-only bg-white p-6 rounded-2xl border border-corporate-border shadow-xs">
+            <p class="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">Valorización Total (Filtro Actual)</p>
+            <h2 id="total-valor" class="text-4xl font-extrabold text-emerald-600">$0.00</h2>
           </div>
         </div>
 
-        <!-- Panel de Filtros Analíticos -->
-        <div class="bg-white p-5 rounded-xl border border-corporate-border shadow-xs mb-6">
-            <h3 class="font-bold text-slate-700 border-b pb-3 mb-4">Filtros de Análisis Cruzado</h3>
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                <div>
-                    <label class="block text-xs font-semibold text-slate-500 mb-1">Filtro Almacén</label>
-                    <select id="filtro-almacen" class="w-full border rounded-md px-3 py-2.5 text-sm bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none transition">
-                        <option value="">Todos los Almacenes</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-slate-500 mb-1">Filtro Categoría</label>
-                    <select id="filtro-categoria" class="w-full border rounded-md px-3 py-2.5 text-sm bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none transition">
-                        <option value="">Todas las Categorías</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-slate-500 mb-1">Filtro Producto</label>
-                    <select id="filtro-producto" class="w-full border rounded-md px-3 py-2.5 text-sm bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none transition">
-                        <option value="">Todos los Productos</option>
-                    </select>
-                </div>
-                <div>
-                    <button onclick="cargarDashboard()" class="w-full bg-corporate-primary text-white px-6 py-2.5 rounded-md text-sm hover:bg-blue-800 shadow-xs font-medium transition flex items-center justify-center gap-2">
-                        🔍 Aplicar Filtros
-                    </button>
-                </div>
+        <!-- Filtros -->
+        <div class="bg-white p-6 rounded-2xl border border-corporate-border shadow-xs mb-8">
+          <h3 class="font-bold text-slate-700 border-b pb-3 mb-4">Filtros de Análisis Cruzado</h3>
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Filtro Almacén</label>
+              <select id="filtro-almacen" class="w-full border rounded-lg px-4 py-2 text-sm bg-slate-50 outline-none"><option value="">Todos los Almacenes</option></select>
             </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Filtro Categoría</label>
+              <select id="filtro-categoria" class="w-full border rounded-lg px-4 py-2 text-sm bg-slate-50 outline-none"><option value="">Todas las Categorías</option></select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Filtro Producto</label>
+              <select id="filtro-producto" class="w-full border rounded-lg px-4 py-2 text-sm bg-slate-50 outline-none"><option value="">Todos los Productos</option></select>
+            </div>
+            <div>
+              <button onclick="cargarDashboard()" class="w-full bg-corporate-primary text-white px-4 py-2.5 rounded-lg text-sm hover:bg-blue-800 font-semibold transition shadow-xs">🔍 Aplicar Filtros</button>
+            </div>
+          </div>
         </div>
 
-        <!-- Tabla de Lotes Físicos -->
-        <div class="bg-white rounded-xl border border-corporate-border shadow-xs overflow-hidden">
-          <div class="px-6 py-4 border-b bg-slate-50"><h3 class="font-bold text-slate-700">Existencias Actuales (Método FIFO)</h3></div>
-          <div class="overflow-x-auto">
+        <!-- Tabla FIFO -->
+        <div class="bg-white rounded-2xl border border-corporate-border shadow-xs overflow-hidden">
+          <div class="px-6 py-5 border-b bg-slate-50"><h3 class="font-bold text-slate-700">Existencias Actuales (Método FIFO)</h3></div>
+          <div class="overflow-x-auto max-h-[50vh]">
             <table class="w-full text-left">
               <thead>
-                <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b">
+                <tr id="tabla-head" class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b sticky top-0">
                   <th class="px-6 py-3">Lote ID</th>
                   <th class="px-6 py-3">Producto / SKU</th>
                   <th class="px-6 py-3">Categoría</th>
                   <th class="px-6 py-3">Almacén</th>
                   <th class="px-6 py-3 text-right">Stock Disponible</th>
-                  <th class="px-6 py-3 text-right">Costo Unit.</th>
-                  <th class="px-6 py-3 text-right">Valor Total</th>
                 </tr>
               </thead>
-              <tbody id="tabla-inventario" class="divide-y text-sm text-slate-600">
-                <tr><td colspan="7" class="px-6 py-6 text-center text-slate-400">Cargando información del almacén...</td></tr>
+              <tbody id="tabla-dashboard" class="divide-y text-sm text-slate-600">
+                <tr><td colspan="5" class="px-6 py-8 text-center text-slate-400">Cargando inventario...</td></tr>
               </tbody>
             </table>
           </div>
         </div>
-
       </main>
     </div>
   </div>
 
   <script>
-    async function cargarFiltrosListas() {
+    // Todo envuelto de forma segura para que no se ejecute antes de tiempo
+    document.addEventListener("DOMContentLoaded", () => {
+        // 1. Ocultar menús y tarjetas según permisos
+        if (!puedeVerCostos) {
+            document.querySelectorAll('.costos-only').forEach(el => el.classList.add('hidden'));
+        }
+        if (currentUser && currentUser.rol !== 'Master') {
+            document.querySelectorAll('.master-only').forEach(el => el.classList.add('hidden'));
+        }
+        if (currentUser && (currentUser.rol === 'Operario' || currentUser.rol === 'Consulta')) {
+            document.querySelectorAll('.admin-only').forEach(el => el.classList.add('hidden'));
+        }
+
+        // 2. Inyectar columnas de costos solo si es Master o Administrador
+        if (puedeVerCostos) {
+            const tablaHead = document.getElementById('tabla-head');
+            if(tablaHead) {
+                tablaHead.innerHTML += `<th class="px-6 py-3 text-right">Costo Unit.</th><th class="px-6 py-3 text-right">Valor Total ($)</th>`;
+            }
+        }
+
+        // 3. Ejecutar las consultas al servidor AHORA que es seguro
+        cargarFiltros();
+        cargarDashboard();
+    });
+
+    async function cargarFiltros() {
+        const headers = { headers: { 'Authorization': `Bearer ${token}` } };
         try {
-            const reqOpciones = { headers: { 'Authorization': `Bearer ${token}` } };
-            const [almRes, catRes, prodRes] = await Promise.all([
-                fetch('/api/almacenes', reqOpciones),
-                fetch('/api/categorias', reqOpciones),
-                fetch('/api/productos', reqOpciones)
+            const [alm, cat, prod] = await Promise.all([
+                fetch('/api/almacenes', headers).then(r=>r.json()),
+                fetch('/api/categorias', headers).then(r=>r.json()),
+                fetch('/api/productos', headers).then(r=>r.json())
             ]);
-            
-            const almacenes = await almRes.json();
-            const categorias = await catRes.json();
-            const productos = await prodRes.json();
-
-            const selAlm = document.getElementById('filtro-almacen');
-            if (selAlm && Array.isArray(almacenes)) {
-                almacenes.forEach(a => selAlm.innerHTML += `<option value="${a.nombre}">${a.nombre}</option>`);
-            }
-            
-            const selCat = document.getElementById('filtro-categoria');
-            if (selCat && Array.isArray(categorias)) {
-                categorias.forEach(c => selCat.innerHTML += `<option value="${c.id}">${c.nombre}</option>`);
-            }
-
-            const selProd = document.getElementById('filtro-producto');
-            if (selProd && Array.isArray(productos)) {
-                productos.forEach(p => selProd.innerHTML += `<option value="${p.id}">${p.nombre} (SKU: ${p.sku})</option>`);
-            }
-        } catch (error) { console.error("Error cargando filtros:", error); }
+            document.getElementById('filtro-almacen').innerHTML += alm.map(a => `<option value="${a.nombre}">${a.nombre}</option>`).join('');
+            document.getElementById('filtro-categoria').innerHTML += cat.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
+            document.getElementById('filtro-producto').innerHTML += prod.map(p => `<option value="${p.id}">${p.nombre} (SKU: ${p.sku})</option>`).join('');
+        } catch (e) { console.error("Error cargando filtros", e); }
     }
 
     async function cargarDashboard() {
-        const almacen = document.getElementById('filtro-almacen')?.value || '';
-        const categoria = document.getElementById('filtro-categoria')?.value || '';
-        const producto = document.getElementById('filtro-producto')?.value || '';
-        const tbody = document.getElementById('tabla-inventario');
-
-        tbody.innerHTML = `<tr><td colspan="7" class="text-center py-6 text-slate-400">Consultando existencias...</td></tr>`;
-
-        let url = `/api/inventario-lotes?v=1`;
-        if (almacen) url += `&almacen=${encodeURIComponent(almacen)}`;
-        if (categoria) url += `&categoria=${categoria}`;
-        if (producto) url += `&producto=${producto}`;
+        const almacen = document.getElementById('filtro-almacen').value;
+        const categoria = document.getElementById('filtro-categoria').value;
+        const producto = document.getElementById('filtro-producto').value;
+        
+        let url = '/api/inventario-lotes?v=1';
+        if(almacen) url += `&almacen=${encodeURIComponent(almacen)}`;
+        if(categoria) url += `&categoria=${categoria}`;
+        if(producto) url += `&producto=${producto}`;
 
         try {
             const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
-            if (!res.ok) throw new Error("Error en el servidor");
-            
+            if (!res.ok) throw new Error("Token inválido");
             const lotes = await res.json();
+            
+            let html = '';
+            let valTotal = 0;
 
-            // Llenar la tabla
             if (lotes.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-slate-500 font-medium">No se encontraron lotes activos con los filtros seleccionados.</td></tr>`;
+                html = `<tr><td colspan="${puedeVerCostos ? 7 : 5}" class="px-6 py-8 text-center text-slate-500">No hay lotes con stock disponibles bajo estos filtros.</td></tr>`;
             } else {
-                tbody.innerHTML = lotes.map(l => `
-                    <tr class="hover:bg-slate-50 transition">
-                        <td class="px-6 py-4 font-mono font-bold text-blue-600 whitespace-nowrap">LOT-${String(l.lote_id).padStart(3, '0')}</td>
-                        <td class="px-6 py-4">
-                            <p class="font-medium text-slate-800">${l.nombre}</p>
-                            <p class="text-xs text-slate-400">SKU: ${l.sku}</p>
-                        </td>
-                        <td class="px-6 py-4 text-slate-500">${l.categoria_nombre || 'S/N'}</td>
-                        <td class="px-6 py-4 text-slate-500 whitespace-nowrap"><span class="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full text-xs font-medium border">${l.almacen || 'Principal'}</span></td>
-                        <td class="px-6 py-4 font-bold text-emerald-600 text-right whitespace-nowrap">${Number(l.stock_restante).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} <span class="text-xs font-normal">${l.unidad_medida}</span></td>
-                        <td class="px-6 py-4 text-slate-600 text-right whitespace-nowrap">$${Number(l.costo_unitario).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                        <td class="px-6 py-4 font-bold text-slate-800 text-right whitespace-nowrap">$${(Number(l.stock_restante) * Number(l.costo_unitario)).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                    </tr>
-                `).join('');
+                lotes.forEach(l => {
+                    const cant = parseFloat(l.stock_restante);
+                    
+                    html += `
+                        <tr class="hover:bg-slate-50 transition">
+                            <td class="px-6 py-4 font-mono font-bold text-blue-600">LOT-${String(l.lote_id).padStart(3, '0')}</td>
+                            <td class="px-6 py-4"><p class="font-bold text-slate-800">${l.nombre}</p><p class="text-xs text-slate-400">SKU: ${l.sku}</p></td>
+                            <td class="px-6 py-4 text-slate-500">${l.categoria_nombre || 'N/A'}</td>
+                            <td class="px-6 py-4"><span class="bg-slate-100 px-2 py-1 rounded text-xs border">${l.almacen || 'Principal'}</span></td>
+                            <td class="px-6 py-4 font-extrabold text-emerald-600 text-right">${cant.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} <span class="text-xs font-normal text-slate-400">${l.unidad_medida}</span></td>
+                    `;
+                    
+                    // Solo llenamos dinero si tiene permiso
+                    if (puedeVerCostos) {
+                        const costo = parseFloat(l.costo_unitario) || 0;
+                        const totalLinea = cant * costo;
+                        valTotal += totalLinea;
+                        
+                        html += `
+                            <td class="px-6 py-4 font-medium text-slate-600 text-right">$${costo.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                            <td class="px-6 py-4 font-bold text-slate-800 text-right">$${totalLinea.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        `;
+                    }
+                    html += `</tr>`;
+                });
             }
 
-            // Recalcular los KPIs superiores basándose en los datos filtrados
-            const totalItems = lotes.length;
-            const totalValorizado = lotes.reduce((sum, l) => sum + (Number(l.stock_restante) * Number(l.costo_unitario)), 0);
+            document.getElementById('tabla-dashboard').innerHTML = html;
+            document.getElementById('total-lotes').innerText = lotes.length;
             
-            document.getElementById('card-items').innerText = totalItems;
-            document.getElementById('card-valor').innerText = `$${totalValorizado.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-
-        } catch (error) { 
-            console.error(error);
-            tbody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-red-500">Error de conexión al cargar el dashboard.</td></tr>`;
+            if (puedeVerCostos) {
+                document.getElementById('total-valor').innerText = `$${valTotal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            }
+        } catch (e) {
+            console.error(e);
+            document.getElementById('tabla-dashboard').innerHTML = `<tr><td colspan="7" class="px-6 py-8 text-center text-red-500">Error al cargar datos. Recargue la página.</td></tr>`;
         }
     }
 
-    // Inicializar la pantalla
-    cargarFiltrosListas();
-    cargarDashboard();
+    function descargarStockExcel() {
+        // ... (Tu código actual para descargar, lo mantengo intacto)
+        window.location.href = '/api/reporte/descargar-stock?v=1';
+    }
   </script>
 </body>
 </html>

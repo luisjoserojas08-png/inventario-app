@@ -12,8 +12,19 @@
 <body class="bg-corporate-light font-sans text-slate-800">
 
   <script>
+    // 1. Validar sesión
     const token = localStorage.getItem('erp_token') || localStorage.getItem('token');
     if (!token) window.location.href = 'login.html';
+    
+    // 2. Definir la función que faltaba para leer el token
+    function parseJwt(t) { 
+        try { return JSON.parse(atob(t.split('.')[1])); } 
+        catch (e) { return null; } 
+    }
+    
+    // 3. Leer el rol y determinar si puede ver costos
+    const currentUser = parseJwt(token);
+    const puedeVerCostos = currentUser && ['Master', 'Administrador', 'Consulta'].includes(currentUser.rol);
   </script>
 
   <div class="flex h-screen overflow-hidden">
@@ -22,22 +33,22 @@
       <div class="p-6 text-xl font-bold text-white tracking-wider border-b border-slate-800">ERP Genética</div>
       <nav class="flex-1 p-4 space-y-2 overflow-y-auto">
         <a href="index.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📊 Dashboard Inventario</a>
-        <a href="costeo.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">💰 Costeo de Existencias</a>
+        <a href="costeo.html" class="costos-only admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">💰 Costeo de Existencias</a>
         <a href="productos.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📦 Maestro de Productos</a>
         <a href="entradas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📥 Registro de Compras</a>
         <a href="salidas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📤 Registro de Salidas</a>
         <a href="reportes.html" class="block px-4 py-2.5 rounded-lg bg-corporate-primary text-white font-medium shadow-xs">📑 Historial y Reportes</a>
         <a href="categorias.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🏷️ Categorías y Almacén</a>
         <a href="carga.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📂 Carga Masiva</a>
-        <a href="usuarios.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">👥 Gestión de Usuarios</a>
-        <a href="auditoria.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🛡️ Auditoría del Sistema</a>
+        <a href="usuarios.html" class="master-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">👥 Gestión de Usuarios</a>
+        <a href="auditoria.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">🛡️ Auditoría del Sistema</a>
       </nav>
-      <div class="p-4 border-t border-slate-800 text-xs text-slate-500">Sesión Activa</div>
     </aside>
 
     <div class="flex-1 flex flex-col overflow-y-auto">
       <header class="bg-white border-b h-16 flex items-center justify-between px-8 shadow-xs shrink-0">
         <h1 class="text-lg font-semibold text-slate-700">Historial y Auditoría de Movimientos</h1>
+        <button onclick="localStorage.clear(); window.location.href='login.html'" class="text-sm text-red-600 font-medium bg-red-50 px-3 py-1.5 rounded-lg hover:bg-red-100 transition">Cerrar Sesión</button>
       </header>
 
       <main class="p-8">
@@ -76,7 +87,6 @@
                     <label class="block text-xs font-semibold text-slate-500 mb-1">Producto</label>
                     <select id="filtro-producto" class="w-full border rounded-md px-3 py-2 text-sm bg-slate-50 outline-none"><option value="">Todos</option></select>
                 </div>
-                <!-- Filtro específico para Salidas -->
                 <div id="contenedor-centro" class="hidden">
                     <label class="block text-xs font-semibold text-slate-500 mb-1">Centro de Costo</label>
                     <select id="filtro-centro" class="w-full border rounded-md px-3 py-2 text-sm bg-slate-50 outline-none"><option value="">Todos</option></select>
@@ -96,16 +106,10 @@
             <table class="w-full text-left">
               <thead>
                 <tr id="tabla-headers" class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b sticky top-0">
-                  <th class="px-6 py-3">Lote ID</th>
-                  <th class="px-6 py-3">Producto</th>
-                  <th class="px-6 py-3">Almacén</th>
-                  <th class="px-6 py-3">Cantidad</th>
-                  <th class="px-6 py-3">Costo Unit.</th>
-                  <th class="px-6 py-3">Fecha</th>
                 </tr>
               </thead>
               <tbody id="tabla-reportes" class="divide-y text-sm text-slate-600">
-                <tr><td colspan="6" class="px-6 py-6 text-center text-slate-400">Seleccione los filtros y cargue la información...</td></tr>
+                <tr><td colspan="7" class="px-6 py-6 text-center text-slate-400">Seleccione los filtros y cargue la información...</td></tr>
               </tbody>
             </table>
           </div>
@@ -115,28 +119,30 @@
   </div>
 
   <script>
+    // Ocultar menús según rol al cargar la página
+    document.addEventListener("DOMContentLoaded", () => {
+        if (!puedeVerCostos) { document.querySelectorAll('.costos-only').forEach(el => el.classList.add('hidden')); }
+        if (currentUser && currentUser.rol !== 'Master') { document.querySelectorAll('.master-only').forEach(el => el.classList.add('hidden')); }
+        if (currentUser && (currentUser.rol === 'Operario' || currentUser.rol === 'Consulta')) { document.querySelectorAll('.admin-only').forEach(el => el.classList.add('hidden')); }
+    });
+
     let tipoActual = 'entradas';
     const headersConfig = { headers: { 'Authorization': `Bearer ${token}` } };
 
     async function cargarListasFiltro() {
         try {
             const [almRes, catRes, prodRes, cenRes] = await Promise.all([
-                fetch('/api/almacenes', headersConfig),
-                fetch('/api/categorias', headersConfig),
-                fetch('/api/productos', headersConfig),
-                fetch('/api/centros-costo', headersConfig)
+                fetch('/api/almacenes', headersConfig), fetch('/api/categorias', headersConfig),
+                fetch('/api/productos', headersConfig), fetch('/api/centros-costo', headersConfig)
             ]);
-            
-            const almacenes = await almRes.json();
-            const categorias = await catRes.json();
-            const productos = await prodRes.json();
-            const centros = await cenRes.json();
+            const almacenes = await almRes.json(); const categorias = await catRes.json();
+            const productos = await prodRes.json(); const centros = await cenRes.json();
 
-            document.getElementById('filtro-almacen').innerHTML = '<option value="">Todos</option>' + almacenes.map(a => `<option value="${a.nombre}">${a.nombre}</option>`).join('');
-            document.getElementById('filtro-categoria').innerHTML = '<option value="">Todas</option>' + categorias.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
-            document.getElementById('filtro-producto').innerHTML = '<option value="">Todos</option>' + productos.map(p => `<option value="${p.id}">${p.nombre} (SKU: ${p.sku})</option>`).join('');
-            document.getElementById('filtro-centro').innerHTML = '<option value="">Todos los Centros</option>' + centros.map(cc => `<option value="${cc.id}">${cc.codigo} - ${cc.nombre}</option>`).join('');
-        } catch (e) { console.error("Error cargando filtros", e); }
+            document.getElementById('filtro-almacen').innerHTML += almacenes.map(a => `<option value="${a.nombre}">${a.nombre}</option>`).join('');
+            document.getElementById('filtro-categoria').innerHTML += categorias.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
+            document.getElementById('filtro-producto').innerHTML += productos.map(p => `<option value="${p.id}">${p.nombre} (SKU: ${p.sku})</option>`).join('');
+            document.getElementById('filtro-centro').innerHTML += centros.map(cc => `<option value="${cc.id}">${cc.codigo} - ${cc.nombre}</option>`).join('');
+        } catch (e) { console.error(e); }
     }
 
     function cambiarTipo(tipo) {
@@ -158,10 +164,6 @@
     }
 
     async function cargarReporte() {
-        // Obtenemos rol del token (agregado al principio del archivo)
-        const currentUser = parseJwt(token);
-        const puedeVerCostos = currentUser && ['Master', 'Administrador'].includes(currentUser.rol);
-
         const inicio = document.getElementById('filtro-inicio').value;
         const fin = document.getElementById('filtro-fin').value;
         const almacen = document.getElementById('filtro-almacen').value;
@@ -188,9 +190,9 @@
                 headers.innerHTML = `<th class="px-6 py-3">Lote ID</th><th class="px-6 py-3">Producto / SKU</th><th class="px-6 py-3">Almacén</th><th class="px-6 py-3 text-right">Cantidad</th>
                     ${puedeVerCostos ? '<th class="px-6 py-3 text-right">Costo Unit.</th>' : ''} <th class="px-6 py-3">Fecha</th>`;
                 
-                if (!datos.length) { tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-slate-500">No se encontraron entradas.</td></tr>`; return; }
+                if (!datos.length) { tbody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-slate-500">No se encontraron entradas con estos filtros.</td></tr>`; return; }
                 tbody.innerHTML = datos.map(d => `
-                    <tr class="hover:bg-slate-50">
+                    <tr class="hover:bg-slate-50 transition">
                         <td class="px-6 py-4 font-mono font-bold text-blue-600">LOT-${String(d.id).padStart(3, '0')}</td>
                         <td class="px-6 py-4"><p class="font-medium text-slate-800">${d.producto_nombre}</p><p class="text-xs text-slate-400">SKU: ${d.sku}</p></td>
                         <td class="px-6 py-4"><span class="bg-slate-100 px-2.5 py-1 rounded-full text-xs border">${d.almacen || 'Principal'}</span></td>
@@ -203,9 +205,9 @@
                 headers.innerHTML = `<th class="px-6 py-3">Salida ID</th><th class="px-6 py-3">Producto / SKU</th><th class="px-6 py-3">Centro de Costo</th><th class="px-6 py-3 text-right">Cantidad</th>
                     ${puedeVerCostos ? '<th class="px-6 py-3 text-right">Costo Unit.</th>' : ''} <th class="px-6 py-3">Concepto</th><th class="px-6 py-3">Fecha</th>`;
                 
-                if (!datos.length) { tbody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-slate-500">No se encontraron salidas.</td></tr>`; return; }
+                if (!datos.length) { tbody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-slate-500">No se encontraron salidas con estos filtros.</td></tr>`; return; }
                 tbody.innerHTML = datos.map(d => `
-                    <tr class="hover:bg-slate-50">
+                    <tr class="hover:bg-slate-50 transition">
                         <td class="px-6 py-4 font-mono font-bold text-orange-600">SAL-${String(d.id).padStart(3, '0')}</td>
                         <td class="px-6 py-4"><p class="font-medium text-slate-800">${d.producto_nombre}</p><p class="text-xs text-slate-400">SKU: ${d.sku}</p></td>
                         <td class="px-6 py-4"><span class="bg-orange-50 text-orange-700 px-2.5 py-1 rounded-full text-xs font-medium border border-orange-200">${d.centro_costo_nombre || 'General'}</span></td>
@@ -215,22 +217,23 @@
                         <td class="px-6 py-4 text-slate-500">${new Date(d.fecha).toLocaleString('es-VE')}</td>
                     </tr>`).join('');
             }
-        } catch (e) { console.error(e); }
+        } catch (e) { 
+            console.error(e); 
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-red-500">Error al cargar datos. Recargue la página.</td></tr>`;
+        }
     }
 
     function descargarExcel() {
         const inicio = document.getElementById('filtro-inicio').value;
         const fin = document.getElementById('filtro-fin').value;
         const centro = document.getElementById('filtro-centro').value;
-        
         let url = `/api/reporte/descargar-historial?tipo=${tipoActual}`;
-        if (inicio) url += `&inicio=${inicio}`;
-        if (fin) url += `&fin=${fin}`;
+        if (inicio) url += `&inicio=${inicio}`; if (fin) url += `&fin=${fin}`;
         if (tipoActual === 'salidas' && centro) url += `&centro_costo=${centro}`;
-
         window.location.href = url;
     }
 
+    // Inicializar la vista
     cargarListasFiltro();
     cargarReporte();
   </script>

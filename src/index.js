@@ -421,7 +421,7 @@ app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => 
         const userRol = userQuery.rows.length > 0 ? userQuery.rows[0].rol : 'Operario';
         
         // VALIDACIÓN DE ROL: Solo Master y Administrador ven costos
-        const puedeVerCostos = ['Master', 'Administrador'].includes(userRol);
+        const puedeVerCostos = ['Master', 'Administrador', 'Consulta'].includes(userRol);
 
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet(`Reporte de ${tipo.toUpperCase()}`);
@@ -510,8 +510,8 @@ app.get('/api/reporte/entradas', verificarToken, async (req, res) => {
     
     try { 
         let datos = (await pool.query(query, params)).rows;
-        // BLINDAJE: Limpiamos los costos si no es Master ni Administrador
-        if (!['Master', 'Administrador'].includes(req.user.rol)) {
+        // BLINDAJE: Limpiamos los costos si no es Master ni Administrador o Consulta
+        if (!['Master', 'Administrador', 'Consulta'].includes(req.user.rol)) {
             datos = datos.map(({ costo_unitario, ...resto }) => resto);
         }
         res.json(datos); 

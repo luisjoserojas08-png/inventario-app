@@ -11,9 +11,13 @@
 </head>
 <body class="bg-corporate-light font-sans text-slate-800">
 
-  <script>
+<script>
     const token = localStorage.getItem('erp_token') || localStorage.getItem('token');
     if (!token) window.location.href = 'login.html';
+    
+    // Faltaba agregar esta función y variable para que el bloque universal funcione
+    function parseJwt(t) { try { return JSON.parse(atob(t.split('.')[1])); } catch (e) { return null; } }
+    const currentUser = parseJwt(token);
   </script>
 
   <div class="flex h-screen overflow-hidden">

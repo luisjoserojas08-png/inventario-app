@@ -53,6 +53,9 @@
             <div>
               <label class="block text-sm font-medium mb-1 text-slate-700">Seleccionar Producto Existente</label>
               <select id="producto_id" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-corporate-primary bg-white"></select>
+              
+              <!-- ALERTA DE PRODUCTOS EN TRÁNSITO -->
+              <div id="alerta-transito" class="hidden bg-amber-50 border-l-4 border-amber-500 text-amber-700 p-3 text-xs rounded-r-lg mt-2 font-medium"></div>
             </div>
             
             <div class="grid grid-cols-2 gap-4">
@@ -66,7 +69,6 @@
               </div>
             </div>
 
-            <!-- AQUÍ ESTÁ EL AJUSTE DEL SELECTOR DE ESTADO -->
             <div class="grid grid-cols-2 gap-4">
                 <div>
                   <label class="block text-sm font-medium mb-1 text-slate-700">Fecha de Compra / Emisión</label>
@@ -92,14 +94,14 @@
   </div>
 
   <script>
-    // Blindaje de seguridad para la vista
+    document.getElementById('fecha_real').valueAsDate = new Date();
+
     // ==========================================
     // BLOQUE DE SEGURIDAD UNIVERSAL Y ROLES
     // ==========================================
     if (currentUser) {
         const rol = currentUser.rol;
         
-        // 1. Reglas básicas por clases HTML
         if (rol !== 'Master') {
             document.querySelectorAll('.master-only').forEach(el => el.style.display = 'none');
         }
@@ -107,16 +109,13 @@
             document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
         }
 
-        // 2. Blindaje Estricto del Menú Lateral (Sidebar)
         document.querySelectorAll('aside nav a').forEach(link => {
             const href = link.getAttribute('href');
             
-            // Nadie excepto Master puede ver Gestión de Usuarios
             if (href === 'usuarios.html' && rol !== 'Master') {
                 link.style.display = 'none';
             }
             
-            // Regla EXCLUSIVA para el rol Consulta: Solo ve 3 pantallas
             if (rol === 'Consulta') {
                 const permitidos = ['index.html', 'reportes.html', 'productos.html'];
                 if (!permitidos.includes(href)) {
@@ -125,7 +124,6 @@
             }
         });
 
-        // 3. Ocultar módulos de costos visuales (Si existen en la pantalla actual)
         const puedeVerCostos = ['Master', 'Administrador', 'Consulta'].includes(rol);
         if (!puedeVerCostos) {
             const thCostoU = document.getElementById('th-costou');
@@ -138,7 +136,45 @@
         }
     }
 
-    // Evento de guardado que ahora envía el Estado
+    async function cargarProductos() {
+        try {
+            const res = await fetch('/api/productos', { headers: { 'Authorization': `Bearer ${token}` } });
+            const prods = await res.json();
+            document.getElementById('producto_id').innerHTML = '<option value="">-- Seleccione un producto --</option>' + 
+                prods.map(p => `<option value="${p.id}">${p.nombre} [SKU: ${p.sku}]</option>`).join('');
+        } catch (e) {
+            console.error("Error al cargar productos", e);
+        }
+    }
+
+    // ==========================================
+    // VALIDACIÓN PREVENTIVA: PRODUCTOS EN TRÁNSITO
+    // ==========================================
+    document.getElementById('producto_id').addEventListener('change', async (e) => {
+        const pId = e.target.value;
+        const alerta = document.getElementById('alerta-transito');
+        
+        if (!pId) { 
+            alerta.classList.add('hidden'); 
+            return; 
+        }
+        
+        try {
+            const res = await fetch(`/api/productos/verificar-transito/${pId}`, { headers: { 'Authorization': `Bearer ${token}` } });
+            const data = await res.json();
+            
+            if (data.enTransito) {
+                alerta.textContent = `⚠️ Alerta Logística: Este producto ya registra ${data.cantidadTransito.toFixed(2)} unidades en camino (Estado: TRÁNSITO).`;
+                alerta.classList.remove('hidden');
+            } else {
+                alerta.classList.add('hidden');
+            }
+        } catch (err) {
+            console.error("Error al verificar tránsito", err);
+        }
+    });
+
+    // Envío del formulario de compra/entrada
     document.getElementById('form-entrada').addEventListener('submit', async (e) => {
         e.preventDefault();
         const msg = document.getElementById('msg-entrada');
@@ -152,20 +188,18 @@
                     cantidad: parseFloat(document.getElementById('cantidad').value),
                     nro_documento: document.getElementById('nro_documento').value,
                     fecha: document.getElementById('fecha_real').value,
-                    estado: document.getElementById('estado').value // <--- ENVÍO DEL ESTADO AL SERVIDOR
+                    estado: document.getElementById('estado').value
                 })
             });
             
             const data = await res.json();
             msg.className = `px-4 py-3 rounded-lg text-sm font-medium block mt-4 ${res.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`;
-            
-            // Usamos data.mensaje que viene del backend y te dirá si se guardó como DISPONIBLE o TRÁNSITO
             msg.textContent = res.ok ? `✅ ${data.mensaje}` : `❌ ${data.error}`;
             
             if(res.ok) {
                 document.getElementById('form-entrada').reset();
                 document.getElementById('fecha_real').valueAsDate = new Date();
-                // Ocultar mensaje después de 4 segundos
+                document.getElementById('alerta-transito').classList.add('hidden');
                 setTimeout(() => { msg.classList.add('hidden'); }, 4000);
             }
         } catch (error) { 

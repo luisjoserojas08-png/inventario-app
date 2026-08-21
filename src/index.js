@@ -334,6 +334,28 @@ app.get('/api/inventario-lotes', verificarToken, async (req, res) => {
 // ==========================================
 // ENTRADAS (ALMACÉN O TRÁNSITO)
 // ==========================================
+
+// VERIFICAR SI UN PRODUCTO TIENE STOCK EN TRÁNSITO
+app.get('/api/productos/verificar-transito/:id', verificarToken, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const transitoRes = await pool.query(
+            `SELECT COUNT(*), SUM(stock_restante) as total_transito 
+             FROM entradas 
+             WHERE producto_id = $1 AND estado = 'TRANSITO'`,
+            [id]
+        );
+        
+        const count = parseInt(transitoRes.rows[0].count) || 0;
+        const total = parseFloat(transitoRes.rows[0].total_transito) || 0;
+
+        res.json({ enTransito: count > 0, cantidadTransito: total });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al verificar tránsito' });
+    }
+});
+
 app.post('/api/entradas', verificarToken, verificarRol(['Master', 'Administrador', 'Operario']), async (req, res) => {
     const client = await pool.connect();
     try {

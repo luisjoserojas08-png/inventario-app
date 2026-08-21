@@ -55,16 +55,16 @@ function verificarRol(rolesPermitidos) {
 // ==========================================
 async function descontarStock(client, producto_id, cantidad) {
     let cantPendiente = parseFloat(cantidad);
+    // BLINDAJE: Solo toma lotes con estado 'DISPONIBLE'
     const lotes = await client.query(
-        'SELECT id, stock_restante FROM entradas WHERE producto_id = $1 AND stock_restante > 0 ORDER BY fecha ASC FOR UPDATE', 
+        "SELECT id, stock_restante FROM entradas WHERE producto_id = $1 AND stock_restante > 0 AND estado = 'DISPONIBLE' ORDER BY fecha ASC FOR UPDATE", 
         [producto_id]
     );
     
     const stockTotal = lotes.rows.reduce((acc, l) => acc + parseFloat(l.stock_restante), 0);
-    if (stockTotal < cantPendiente) throw new Error('Stock insuficiente para realizar esta operación.');
+    if (stockTotal < cantPendiente) throw new Error('Stock DISPONIBLE insuficiente para realizar esta salida. Verifica si hay inventario en tránsito.');
 
     let primerLoteAfectado = null;
-
     for (let lote of lotes.rows) {
         if (cantPendiente <= 0) break;
         if (!primerLoteAfectado) primerLoteAfectado = lote.id;
@@ -247,11 +247,13 @@ app.get('/api/productos', verificarToken, async (req, res) => {
     } catch (e) { res.status(500).json({ error: 'Error' }); }
 });
 
-// DASHBOARD: Lotes con Filtros Avanzados
+// ==========================================
+// DASHBOARD: Lotes con Filtros Avanzados (Incluyendo Estado)
+// ==========================================
 app.get('/api/inventario-lotes', verificarToken, async (req, res) => {
-    const { producto, categoria, almacen } = req.query;
+    const { producto, categoria, almacen, estado } = req.query; 
     try {
-        let query = `SELECT e.id AS lote_id, p.id AS producto_id, p.sku, p.nombre, p.unidad_medida, c.id AS categoria_id, c.nombre AS categoria_nombre, c.almacen, e.stock_restante, e.costo_unitario 
+        let query = `SELECT e.id AS lote_id, p.id AS producto_id, p.sku, p.nombre, p.unidad_medida, c.id AS categoria_id, c.nombre AS categoria_nombre, c.almacen, e.stock_restante, e.costo_unitario, e.estado 
                      FROM entradas e 
                      JOIN productos p ON e.producto_id = p.id 
                      LEFT JOIN categorias c ON p.categoria_id = c.id 
@@ -259,18 +261,12 @@ app.get('/api/inventario-lotes', verificarToken, async (req, res) => {
         let params = [];
         let paramIndex = 1;
 
-        if (producto) {
-            query += ` AND p.id = $${paramIndex++}`;
-            params.push(producto);
-        }
-        if (categoria) {
-            query += ` AND c.id = $${paramIndex++}`;
-            params.push(categoria);
-        }
-        if (almacen) {
-            query += ` AND c.almacen = $${paramIndex++}`;
-            params.push(almacen);
-        }
+        if (producto) { query += ` AND p.id = $${paramIndex++}`; params.push(producto); }
+        if (categoria) { query += ` AND c.id = $${paramIndex++}`; params.push(categoria); }
+        if (almacen) { query += ` AND c.almacen = $${paramIndex++}`; params.push(almacen); }
+        
+        // ESTA ES LA LÍNEA QUE HACE FUNCIONAR EL FILTRO DE ESTADO
+        if (estado) { query += ` AND e.estado = $${paramIndex++}`; params.push(estado); } 
 
         query += ` ORDER BY p.nombre ASC, e.fecha ASC;`;
         res.json((await pool.query(query, params)).rows);
@@ -278,7 +274,7 @@ app.get('/api/inventario-lotes', verificarToken, async (req, res) => {
 });
 
 // ==========================================
-// ENTRADAS (ALMACÉN)
+// ENTRADAS (ALMACÉN O TRÁNSITO)
 // ==========================================
 app.post('/api/entradas', verificarToken, verificarRol(['Master', 'Administrador', 'Operario']), async (req, res) => {
     const client = await pool.connect();
@@ -287,25 +283,75 @@ app.post('/api/entradas', verificarToken, verificarRol(['Master', 'Administrador
         
         let fechaTransaccion = new Date().toISOString();
         if (req.body.fecha) {
-            if (req.body.fecha.includes('T')) {
-                fechaTransaccion = req.body.fecha;
-            } else {
-                const ahora = new Date();
-                const hora = ahora.toTimeString().split(' ')[0]; 
-                fechaTransaccion = `${req.body.fecha}T${hora}-04:00`; 
-            }
+            fechaTransaccion = req.body.fecha.includes('T') ? req.body.fecha : `${req.body.fecha}T${new Date().toTimeString().split(' ')[0]}-04:00`; 
         }
 
         const cantidadNumerica = parseFloat(req.body.cantidad);
         const nroDocumento = req.body.nro_documento || 'S/N';
-        const costoNumerico = 0;
+        const costoNumerico = parseFloat(req.body.costo_unitario) || 0; 
+        const estado = req.body.estado || 'DISPONIBLE'; // <-- AQUÍ SE GUARDA EL ESTADO EN LA BD
 
         await client.query('UPDATE productos SET stock_actual = stock_actual + $1 WHERE id = $2', [cantidadNumerica, req.body.producto_id]);
-        await client.query('INSERT INTO entradas (producto_id, cantidad, costo_unitario, stock_restante, fecha, usuario_id, nro_documento) VALUES ($1, $2, $3, $4, $5, $6, $7)', 
-            [req.body.producto_id, cantidadNumerica, costoNumerico, cantidadNumerica, fechaTransaccion, req.user.id, nroDocumento]);
         
-        await client.query('COMMIT'); res.status(201).json({ mensaje: 'Lote físico registrado' });
-    } catch (error) { await client.query('ROLLBACK'); res.status(500).json({ error: error.message }); } finally { client.release(); }
+        await client.query('INSERT INTO entradas (producto_id, cantidad, costo_unitario, stock_restante, fecha, usuario_id, nro_documento, estado) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)', 
+            [req.body.producto_id, cantidadNumerica, costoNumerico, cantidadNumerica, fechaTransaccion, req.user.id, nroDocumento, estado]);
+        
+        await client.query('COMMIT'); 
+        res.status(201).json({ mensaje: `Lote registrado exitosamente como ${estado === 'DISPONIBLE' ? 'Disponible' : 'En Tránsito'}` });
+    } catch (error) { 
+        await client.query('ROLLBACK'); res.status(500).json({ error: error.message }); 
+    } finally { client.release(); }
+});
+
+// ==========================================
+// RECIBIR INVENTARIO EN TRÁNSITO (RECEPCIÓN TOTAL O PARCIAL)
+// ==========================================
+app.post('/api/entradas/recibir-transito/:id', verificarToken, verificarRol(['Master', 'Administrador', 'Operario']), async (req, res) => {
+    const loteId = req.params.id;
+    const client = await pool.connect();
+    
+    try {
+        await client.query('BEGIN');
+        
+        const rawCantidad = req.body.cantidad_recibida;
+        const cantidad_recibida = parseFloat(String(rawCantidad).replace(',', '.'));
+        const nroDocumento = req.body.nro_documento || 'S/N';
+        
+        let fechaRecepcion = new Date().toISOString();
+        if (req.body.fecha) {
+            fechaRecepcion = req.body.fecha.includes('T') ? req.body.fecha : `${req.body.fecha}T${new Date().toTimeString().split(' ')[0]}-04:00`; 
+        }
+
+        if (isNaN(cantidad_recibida) || cantidad_recibida <= 0) throw new Error('La cantidad recibida debe ser un número mayor a cero.');
+
+        const reg = await client.query(`SELECT * FROM entradas WHERE id = $1 AND estado = 'TRANSITO' FOR UPDATE`, [loteId]);
+        if (reg.rows.length === 0) throw new Error('Lote en tránsito no encontrado o ya fue recibido totalmente.');
+        const loteOriginal = reg.rows[0];
+
+        if (cantidad_recibida > parseFloat(loteOriginal.stock_restante)) {
+            throw new Error(`No puedes recibir más de lo que está pendiente en tránsito (${loteOriginal.stock_restante}).`);
+        }
+
+        await client.query('UPDATE entradas SET cantidad = cantidad - $1, stock_restante = stock_restante - $1 WHERE id = $2', [cantidad_recibida, loteId]);
+
+        const nuevoLote = await client.query(
+            `INSERT INTO entradas (producto_id, cantidad, costo_unitario, stock_restante, fecha, usuario_id, nro_documento, estado) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, 'DISPONIBLE') RETURNING id`, 
+            [loteOriginal.producto_id, cantidad_recibida, loteOriginal.costo_unitario, cantidad_recibida, fechaRecepcion, req.user.id, nroDocumento]
+        );
+
+        const detallesAudit = `Recepción de Tránsito. Doc: ${nroDocumento}. Cantidad recibida: ${cantidad_recibida}. Origen ID: ${loteId}`;
+        await client.query('INSERT INTO logs_auditoria (usuario_id, accion, tabla_afectada, registro_id, detalles) VALUES ($1, $2, $3, $4, $5)', 
+            [req.user.id, 'RECEPCION_TRANSITO', 'entradas', nuevoLote.rows[0].id, detallesAudit]);
+
+        await client.query('COMMIT'); 
+        res.status(200).json({ mensaje: 'Recepción registrada con éxito. Ya está disponible en inventario.' });
+    } catch (error) { 
+        await client.query('ROLLBACK'); 
+        res.status(400).json({ error: error.message }); 
+    } finally { 
+        client.release(); 
+    }
 });
 
 // ==========================================
@@ -392,10 +438,8 @@ app.put('/api/admin/movimientos/:tipo/:id', verificarToken, verificarRol(['Maste
                 throw new Error(`Este lote ya tiene consumido ${consumido}. No puedes reducirlo a un valor menor.`);
             }
             
-            // 🔥 SOLUCIÓN AQUÍ: Calculamos el nuevo stock restante en JavaScript
             const nuevo_stock_restante = nueva_cantidad - consumido;
 
-            // Le enviamos a la BD los números exactos y usamos ::numeric por si acaso en el stock_actual
             await client.query('UPDATE entradas SET cantidad = $1, stock_restante = $2 WHERE id = $3', [nueva_cantidad, nuevo_stock_restante, id]);
             await client.query('UPDATE productos SET stock_actual = stock_actual + $1::numeric WHERE id = $2', [diferencia, mov.producto_id]);
         } else {
@@ -416,30 +460,6 @@ app.put('/api/admin/movimientos/:tipo/:id', verificarToken, verificarRol(['Maste
     } finally { 
         client.release(); 
     }
-});
-
-app.delete('/api/admin/movimientos/:tipo/:id', verificarToken, verificarRol(['Master', 'Administrador']), async (req, res) => {
-    const { tipo, id } = req.params; 
-    const { motivo } = req.body; 
-    const tabla = (tipo === 'entrada' || tipo === 'entradas') ? 'entradas' : 'salidas';
-    const client = await pool.connect();
-    
-    try {
-        await client.query('BEGIN');
-        const reg = await client.query(`SELECT * FROM ${tabla} WHERE id = $1`, [id]);
-        if (reg.rows.length === 0) throw new Error('Registro no encontrado');
-        const mov = reg.rows[0];
-
-        if (tabla === 'entradas') {
-            if (parseFloat(mov.cantidad) > parseFloat(mov.stock_restante)) throw new Error('Este lote ya fue consumido parcialmente.');
-            await client.query('UPDATE productos SET stock_actual = stock_actual - $1 WHERE id = $2', [mov.cantidad, mov.producto_id]);
-        }
-        if (tabla === 'salidas') await restaurarStock(client, mov.producto_id, mov.cantidad);
-        
-        await client.query('INSERT INTO logs_auditoria (usuario_id, accion, tabla_afectada, registro_id, detalles) VALUES ($1, $2, $3, $4, $5)', [req.user.id, 'BORRADO', tabla, id, JSON.stringify({ ...mov, motivo: motivo || 'N/A' })]);
-        await client.query(`DELETE FROM ${tabla} WHERE id = $1`, [id]);
-        await client.query('COMMIT'); res.status(200).json({ mensaje: 'Eliminado con éxito' });
-    } catch (error) { await client.query('ROLLBACK'); res.status(400).json({ error: error.message }); } finally { client.release(); }
 });
 
 app.delete('/api/admin/movimientos/:tipo/:id', verificarToken, verificarRol(['Master', 'Administrador']), async (req, res) => {
@@ -599,49 +619,10 @@ app.get('/api/reporte/salidas', verificarToken, async (req, res) => {
 });
 
 // ==========================================
-// CARGA MASIVA EXCEL (CON SOPORTE DE FECHAS)
-// ==========================================
-app.post('/api/cargar-masiva/:tipo', verificarToken, verificarRol(['Master', 'Administrador']), upload.single('file'), async (req, res) => {
-    const { tipo } = req.params; 
-    const workbook = xlsx.readFile(req.file.path); 
-    const sheet = workbook.Sheets[workbook.SheetNames[0]]; 
-    const data = xlsx.utils.sheet_to_json(sheet, { raw: false }); 
-    const client = await pool.connect();
-    
-    try {
-        await client.query('BEGIN');
-        for (let row of data) {
-            if (tipo === 'productos') {
-                await client.query('INSERT INTO productos (sku, nombre, categoria_id, unidad_medida) VALUES ($1, $2, $3, $4)', [row.SKU, row.NOMBRE, row.CATEGORIA_ID, row.UOM]);
-            }
-            else if (tipo === 'categorias') {
-                await client.query('INSERT INTO categorias (nombre, almacen) VALUES ($1, $2)', [row.NOMBRE, row.ALMACEN]);
-            }
-            else if (tipo === 'inventario') {
-                let fechaEntrada = new Date().toISOString();
-                if (row.FECHA) {
-                    const partes = String(row.FECHA).split('/');
-                    if (partes.length === 3) {
-                        const dia = partes[0].padStart(2, '0');
-                        const mes = partes[1].padStart(2, '0');
-                        const anio = partes[2];
-                        fechaEntrada = `${anio}-${mes}-${dia}T12:00:00-04:00`; 
-                    }
-                }
-                await client.query('INSERT INTO entradas (producto_id, cantidad, costo_unitario, stock_restante, fecha, usuario_id) VALUES ($1, $2, $3, $4, $5, $6)', 
-                    [row.PRODUCTO_ID, row.CANTIDAD, row.COSTO, row.CANTIDAD, fechaEntrada, req.user.id]);
-                await client.query('UPDATE productos SET stock_actual = stock_actual + $1 WHERE id = $2', [row.CANTIDAD, row.PRODUCTO_ID]);
-            }
-        }
-        await client.query('COMMIT'); res.json({ mensaje: `Carga masiva de ${tipo} completada` });
-    } catch (e) { await client.query('ROLLBACK'); res.status(500).json({ error: e.message }); } finally { client.release(); }
-});
-
-// ==========================================
-// EXCEL DE STOCK (DESCARGA DESDE DASHBOARD) (CON FORMATO Y 200 OK PARA RENDER)
+// EXCEL DE STOCK (DESCARGA DESDE DASHBOARD) (INCLUYE ESTADO)
 // ==========================================
 app.get('/api/reporte/descargar-stock', verificarToken, async (req, res) => {
-    const { producto, categoria, almacen } = req.query;
+    const { producto, categoria, almacen, estado } = req.query;
     try {
         const userQuery = await pool.query('SELECT nombre, rol FROM usuarios WHERE id = $1', [req.user.id]);
         const userName = userQuery.rows.length > 0 ? userQuery.rows[0].nombre : 'Usuario Sistema';
@@ -654,7 +635,7 @@ app.get('/api/reporte/descargar-stock', verificarToken, async (req, res) => {
         let cols = [
             { header: 'Lote ID', key: 'id_lote', width: 12 }, { header: 'SKU', key: 'sku', width: 15 },
             { header: 'Producto', key: 'producto_nombre', width: 35 }, { header: 'Categoría', key: 'categoria_nombre', width: 25 },
-            { header: 'Almacén', key: 'almacen', width: 20 }, { header: 'Stock', key: 'stock_restante', width: 15 },
+            { header: 'Almacén', key: 'almacen', width: 20 }, { header: 'Estado', key: 'estado', width: 15 }, { header: 'Stock', key: 'stock_restante', width: 15 },
             { header: 'Unidad', key: 'unidad_medida', width: 10 }
         ];
 
@@ -665,7 +646,7 @@ app.get('/api/reporte/descargar-stock', verificarToken, async (req, res) => {
 
         worksheet.spliceRows(1, 0, [], [], [], []); 
         const fechaActual = new Date().toLocaleString('es-VE', { timeZone: 'America/Caracas' });
-        const lastCol = puedeVerCostos ? 'I' : 'G'; 
+        const lastCol = puedeVerCostos ? 'J' : 'H'; 
 
         worksheet.getCell('A1').value = 'REPORTE DE EXISTENCIAS (STOCK ACTUAL)';
         worksheet.getCell('A1').font = { size: 14, bold: true, color: { argb: 'FF1E40AF' } };
@@ -688,13 +669,15 @@ app.get('/api/reporte/descargar-stock', verificarToken, async (req, res) => {
             cell.alignment = { vertical: 'middle', horizontal: 'center' }; 
         });
 
-        let query = `SELECT e.id, p.sku, p.nombre AS producto_nombre, p.unidad_medida, c.nombre AS categoria_nombre, c.almacen, e.stock_restante, e.costo_unitario 
+        let query = `SELECT e.id, p.sku, p.nombre AS producto_nombre, p.unidad_medida, c.nombre AS categoria_nombre, c.almacen, e.estado, e.stock_restante, e.costo_unitario 
                      FROM entradas e JOIN productos p ON e.producto_id = p.id LEFT JOIN categorias c ON p.categoria_id = c.id WHERE e.stock_restante > 0`;
         let params = []; let paramIndex = 1;
 
         if (producto) { query += ` AND p.id = $${paramIndex++}`; params.push(producto); }
         if (categoria) { query += ` AND c.id = $${paramIndex++}`; params.push(categoria); }
         if (almacen) { query += ` AND c.almacen = $${paramIndex++}`; params.push(almacen); }
+        if (estado) { query += ` AND e.estado = $${paramIndex++}`; params.push(estado); }
+
         query += ` ORDER BY p.nombre ASC, e.fecha ASC`;
 
         const resultado = await pool.query(query, params);
@@ -720,11 +703,45 @@ app.get('/api/reporte/descargar-stock', verificarToken, async (req, res) => {
 });
 
 // ==========================================
+// CARGA MASIVA EXCEL (CON SOPORTE DE ESTADO Y FECHAS)
+// ==========================================
+app.post('/api/cargar-masiva/:tipo', verificarToken, verificarRol(['Master', 'Administrador']), upload.single('file'), async (req, res) => {
+    const { tipo } = req.params; 
+    const workbook = xlsx.readFile(req.file.path); 
+    const sheet = workbook.Sheets[workbook.SheetNames[0]]; 
+    const data = xlsx.utils.sheet_to_json(sheet, { raw: false }); 
+    const client = await pool.connect();
+    
+    try {
+        await client.query('BEGIN');
+        for (let row of data) {
+            if (tipo === 'productos') {
+                await client.query('INSERT INTO productos (sku, nombre, categoria_id, unidad_medida) VALUES ($1, $2, $3, $4)', [row.SKU, row.NOMBRE, row.CATEGORIA_ID, row.UOM]);
+            }
+            else if (tipo === 'categorias') {
+                await client.query('INSERT INTO categorias (nombre, almacen) VALUES ($1, $2)', [row.NOMBRE, row.ALMACEN]);
+            }
+            else if (tipo === 'inventario') {
+                let fechaEntrada = new Date().toISOString();
+                if (row.FECHA) {
+                    const partes = String(row.FECHA).split('/');
+                    if (partes.length === 3) fechaEntrada = `${partes[2]}-${partes[1].padStart(2, '0')}-${partes[0].padStart(2, '0')}T12:00:00-04:00`; 
+                }
+                const estado = row.ESTADO || 'DISPONIBLE';
+                await client.query('INSERT INTO entradas (producto_id, cantidad, costo_unitario, stock_restante, fecha, usuario_id, estado) VALUES ($1, $2, $3, $4, $5, $6, $7)', 
+                    [row.PRODUCTO_ID, row.CANTIDAD, row.COSTO, row.CANTIDAD, fechaEntrada, req.user.id, estado]);
+                await client.query('UPDATE productos SET stock_actual = stock_actual + $1 WHERE id = $2', [row.CANTIDAD, row.PRODUCTO_ID]);
+            }
+        }
+        await client.query('COMMIT'); res.json({ mensaje: `Carga masiva de ${tipo} completada` });
+    } catch (e) { await client.query('ROLLBACK'); res.status(500).json({ error: e.message }); } finally { client.release(); }
+});
+
+// ==========================================
 // LOGS DE AUDITORÍA DEL SISTEMA
 // ==========================================
 app.get('/api/reporte/logs', verificarToken, verificarRol(['Master', 'Administrador']), async (req, res) => {
     try {
-        // Asignamos el nombre del responsable a todas las variables posibles para evitar el "undefined" en el frontend
         const query = `SELECT l.id, l.accion, l.tabla_afectada, l.registro_id, l.detalles, l.fecha, 
                               u.nombre AS admin, 
                               u.nombre AS admin_nombre, 

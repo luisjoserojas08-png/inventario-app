@@ -10,7 +10,6 @@ const pool = require('./config/db');
 const multer = require('multer');
 const xlsx = require('xlsx');
 
-// Asegurar que la carpeta uploads exista para evitar que Render colapse
 if (!fs.existsSync('uploads')) {
     fs.mkdirSync('uploads', { recursive: true });
 }
@@ -27,7 +26,7 @@ app.use(express.static(path.join(__dirname, '../public')));
 app.get('/', (req, res) => res.redirect('/login.html'));
 
 // ==========================================
-// MIDDLEWARES DE SEGURIDAD Y ROLES
+// MIDDLEWARES
 // ==========================================
 function verificarToken(req, res, next) {
     const authHeader = req.headers['authorization'];
@@ -44,33 +43,30 @@ function verificarToken(req, res, next) {
 function verificarRol(rolesPermitidos) {
     return (req, res, next) => {
         if (!req.user || !rolesPermitidos.includes(req.user.rol)) {
-            return res.status(403).json({ error: 'Acceso denegado: No tienes permisos para esta acción.' });
+            return res.status(403).json({ error: 'Acceso denegado: No tienes permisos.' });
         }
         next();
     };
 }
 
 // ==========================================
-// FUNCIONES MAESTRAS MATEMÁTICAS (FIFO)
+// FUNCIONES FIFO
 // ==========================================
 async function descontarStock(client, producto_id, cantidad) {
     let cantPendiente = parseFloat(cantidad);
-    // BLINDAJE: Solo toma lotes con estado 'DISPONIBLE'
     const lotes = await client.query(
         "SELECT id, stock_restante FROM entradas WHERE producto_id = $1 AND stock_restante > 0 AND estado = 'DISPONIBLE' ORDER BY fecha ASC FOR UPDATE", 
         [producto_id]
     );
     
     const stockTotal = lotes.rows.reduce((acc, l) => acc + parseFloat(l.stock_restante), 0);
-    if (stockTotal < cantPendiente) throw new Error('Stock DISPONIBLE insuficiente para realizar esta salida. Verifica si hay inventario en tránsito.');
+    if (stockTotal < cantPendiente) throw new Error('Stock DISPONIBLE insuficiente. Verifica si hay inventario en tránsito.');
 
     let primerLoteAfectado = null;
     for (let lote of lotes.rows) {
         if (cantPendiente <= 0) break;
         if (!primerLoteAfectado) primerLoteAfectado = lote.id;
-
         let aDescontar = Math.min(parseFloat(lote.stock_restante), cantPendiente);
-        
         await client.query('UPDATE entradas SET stock_restante = stock_restante - $1 WHERE id = $2', [aDescontar, lote.id]);
         cantPendiente -= aDescontar;
     }
@@ -83,19 +79,17 @@ async function restaurarStock(client, producto_id, cantidad) {
         'SELECT id, cantidad, stock_restante FROM entradas WHERE producto_id = $1 AND stock_restante < cantidad ORDER BY fecha DESC FOR UPDATE', 
         [producto_id]
     );
-    
     for (let lote of lotes.rows) {
         if (cantADevolver <= 0) break;
         let espacioDisponible = parseFloat(lote.cantidad) - parseFloat(lote.stock_restante);
         let aRestaurar = Math.min(espacioDisponible, cantADevolver);
-        
         await client.query('UPDATE entradas SET stock_restante = stock_restante + $1 WHERE id = $2', [aRestaurar, lote.id]);
         cantADevolver -= aRestaurar;
     }
 }
 
 // ==========================================
-// RUTAS DE AUTENTICACIÓN Y USUARIOS (SOLO MASTER)
+// USUARIOS
 // ==========================================
 app.post('/api/login', async (req, res) => {
     const { usuario, password } = req.body;
@@ -247,13 +241,11 @@ app.get('/api/productos', verificarToken, async (req, res) => {
     } catch (e) { res.status(500).json({ error: 'Error' }); }
 });
 
-// ==========================================
-// DASHBOARD: Lotes con Filtros Avanzados (Incluyendo Estado)
-// ==========================================
+// DASHBOARD: Forzando actualización en Render 21/08
 app.get('/api/inventario-lotes', verificarToken, async (req, res) => {
     const { producto, categoria, almacen, estado } = req.query; 
     try {
-        let query = `SELECT e.id AS lote_id, p.id AS producto_id, p.sku, p.nombre, p.unidad_medida, c.id AS categoria_id, c.nombre AS categoria_nombre, c.almacen, e.stock_restante, e.costo_unitario, e.estado 
+        let query = `SELECT e.id AS lote_id, p.id AS producto_id, p.sku, p.nombre, p.unidad_medida, c.id AS categoria_id, c.nombre AS categoria_nombre, c.almacen, e.stock_restante, e.costo_unitario, e.estado, e.lote_origen_id 
                      FROM entradas e 
                      JOIN productos p ON e.producto_id = p.id 
                      LEFT JOIN categorias c ON p.categoria_id = c.id 
@@ -264,8 +256,6 @@ app.get('/api/inventario-lotes', verificarToken, async (req, res) => {
         if (producto) { query += ` AND p.id = $${paramIndex++}`; params.push(producto); }
         if (categoria) { query += ` AND c.id = $${paramIndex++}`; params.push(categoria); }
         if (almacen) { query += ` AND c.almacen = $${paramIndex++}`; params.push(almacen); }
-        
-        // ESTA ES LA LÍNEA QUE HACE FUNCIONAR EL FILTRO DE ESTADO
         if (estado) { query += ` AND e.estado = $${paramIndex++}`; params.push(estado); } 
 
         query += ` ORDER BY p.nombre ASC, e.fecha ASC;`;
@@ -289,7 +279,7 @@ app.post('/api/entradas', verificarToken, verificarRol(['Master', 'Administrador
         const cantidadNumerica = parseFloat(req.body.cantidad);
         const nroDocumento = req.body.nro_documento || 'S/N';
         const costoNumerico = parseFloat(req.body.costo_unitario) || 0; 
-        const estado = req.body.estado || 'DISPONIBLE'; // <-- AQUÍ SE GUARDA EL ESTADO EN LA BD
+        const estado = req.body.estado || 'DISPONIBLE'; 
 
         await client.query('UPDATE productos SET stock_actual = stock_actual + $1 WHERE id = $2', [cantidadNumerica, req.body.producto_id]);
         
@@ -304,7 +294,7 @@ app.post('/api/entradas', verificarToken, verificarRol(['Master', 'Administrador
 });
 
 // ==========================================
-// RECIBIR INVENTARIO EN TRÁNSITO (RECEPCIÓN TOTAL O PARCIAL)
+// RECIBIR INVENTARIO EN TRÁNSITO
 // ==========================================
 app.post('/api/entradas/recibir-transito/:id', verificarToken, verificarRol(['Master', 'Administrador', 'Operario']), async (req, res) => {
     const loteId = req.params.id;
@@ -334,10 +324,11 @@ app.post('/api/entradas/recibir-transito/:id', verificarToken, verificarRol(['Ma
 
         await client.query('UPDATE entradas SET cantidad = cantidad - $1, stock_restante = stock_restante - $1 WHERE id = $2', [cantidad_recibida, loteId]);
 
+        // AL RECIBIR, GUARDAMOS EL ID DEL LOTE PADRE PARA PODER ANULARLO DESPUÉS
         const nuevoLote = await client.query(
-            `INSERT INTO entradas (producto_id, cantidad, costo_unitario, stock_restante, fecha, usuario_id, nro_documento, estado) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7, 'DISPONIBLE') RETURNING id`, 
-            [loteOriginal.producto_id, cantidad_recibida, loteOriginal.costo_unitario, cantidad_recibida, fechaRecepcion, req.user.id, nroDocumento]
+            `INSERT INTO entradas (producto_id, cantidad, costo_unitario, stock_restante, fecha, usuario_id, nro_documento, estado, lote_origen_id) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, 'DISPONIBLE', $8) RETURNING id`, 
+            [loteOriginal.producto_id, cantidad_recibida, loteOriginal.costo_unitario, cantidad_recibida, fechaRecepcion, req.user.id, nroDocumento, loteId]
         );
 
         const detallesAudit = `Recepción de Tránsito. Doc: ${nroDocumento}. Cantidad recibida: ${cantidad_recibida}. Origen ID: ${loteId}`;
@@ -346,6 +337,49 @@ app.post('/api/entradas/recibir-transito/:id', verificarToken, verificarRol(['Ma
 
         await client.query('COMMIT'); 
         res.status(200).json({ mensaje: 'Recepción registrada con éxito. Ya está disponible en inventario.' });
+    } catch (error) { 
+        await client.query('ROLLBACK'); 
+        res.status(400).json({ error: error.message }); 
+    } finally { 
+        client.release(); 
+    }
+});
+
+// ==========================================
+// ANULAR RECEPCIÓN DE TRÁNSITO (SOLO ADMIN Y MASTER)
+// ==========================================
+app.post('/api/entradas/anular-recepcion/:id', verificarToken, verificarRol(['Master', 'Administrador']), async (req, res) => {
+    const loteId = req.params.id;
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        
+        // 1. Verificamos el lote disponible a anular
+        const reg = await client.query(`SELECT * FROM entradas WHERE id = $1 FOR UPDATE`, [loteId]);
+        if (reg.rows.length === 0) throw new Error('El lote que intentas anular no existe.');
+        const loteAnular = reg.rows[0];
+
+        if (loteAnular.estado !== 'DISPONIBLE' || !loteAnular.lote_origen_id) {
+            throw new Error('Este registro no corresponde a una recepción de tránsito anulable.');
+        }
+        
+        if (parseFloat(loteAnular.cantidad) !== parseFloat(loteAnular.stock_restante)) {
+            throw new Error(`Imposible anular. De los ${loteAnular.cantidad} recibidos, ya se han consumido y solo quedan ${loteAnular.stock_restante}.`);
+        }
+
+        // 2. Devolvemos la cantidad al lote de tránsito original
+        await client.query('UPDATE entradas SET cantidad = cantidad + $1, stock_restante = stock_restante + $1 WHERE id = $2', [loteAnular.cantidad, loteAnular.lote_origen_id]);
+
+        // 3. Borramos el lote disponible. No restamos de productos.stock_actual porque nunca sumó al recibir (ya sumó al comprarse en tránsito)
+        await client.query(`DELETE FROM entradas WHERE id = $1`, [loteId]);
+
+        // 4. Dejamos huella en auditoría
+        const detallesAudit = `Anulación de Recepción. Cantidad devuelta al tránsito: ${loteAnular.cantidad}. Origen restaurado ID: ${loteAnular.lote_origen_id}`;
+        await client.query('INSERT INTO logs_auditoria (usuario_id, accion, tabla_afectada, registro_id, detalles) VALUES ($1, $2, $3, $4, $5)', 
+            [req.user.id, 'ANULAR_RECEPCION', 'entradas', loteId, detallesAudit]);
+
+        await client.query('COMMIT'); 
+        res.status(200).json({ mensaje: 'Recepción anulada exitosamente. El inventario ha retornado al camión/tránsito.' });
     } catch (error) { 
         await client.query('ROLLBACK'); 
         res.status(400).json({ error: error.message }); 
@@ -474,6 +508,12 @@ app.delete('/api/admin/movimientos/:tipo/:id', verificarToken, verificarRol(['Ma
 
         if (tabla === 'entradas') {
             if (parseFloat(mov.cantidad) > parseFloat(mov.stock_restante)) throw new Error('Este lote ya fue consumido parcialmente.');
+            
+            // BLINDAJE CONTRA ERRORES ADMINISTRATIVOS
+            if (mov.lote_origen_id) {
+                throw new Error('Este registro proviene de un camión en tránsito. Para eliminarlo, ve al Dashboard y presiona el botón rojo "Anular".');
+            }
+
             await client.query('UPDATE productos SET stock_actual = stock_actual - $1 WHERE id = $2', [mov.cantidad, mov.producto_id]);
         }
         if (tabla === 'salidas') await restaurarStock(client, mov.producto_id, mov.cantidad);
@@ -485,7 +525,7 @@ app.delete('/api/admin/movimientos/:tipo/:id', verificarToken, verificarRol(['Ma
 });
 
 // ==========================================
-// EXCEL DE REPORTES HISTÓRICOS (CON FORMATO Y 200 OK PARA RENDER)
+// EXCEL Y REPORTES OMITIDOS PARA AHORRAR ESPACIO VISUAL, PERO YA LOS TIENES ABAJO IGUAL
 // ==========================================
 app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => {
     const { tipo, inicio, fin, centro_costo } = req.query; 
@@ -572,9 +612,6 @@ app.get('/api/reporte/descargar-historial', verificarToken, async (req, res) => 
     } catch (error) { res.status(500).json({ error: 'Error al generar Excel: ' + error.message }); }
 });
 
-// ==========================================
-// REPORTES HISTÓRICOS (JSON PARA LAS TABLAS CON FILTROS Y SEGURIDAD)
-// ==========================================
 app.get('/api/reporte/entradas', verificarToken, async (req, res) => {
     const { inicio, fin, producto, categoria, almacen } = req.query;
     let query = `SELECT e.id, p.sku, p.nombre AS producto_nombre, p.unidad_medida, c.almacen, e.cantidad, e.costo_unitario, e.fecha 
@@ -618,9 +655,6 @@ app.get('/api/reporte/salidas', verificarToken, async (req, res) => {
     } catch (error) { res.status(500).json({ error: 'Error al consultar salidas' }); }
 });
 
-// ==========================================
-// EXCEL DE STOCK (DESCARGA DESDE DASHBOARD) (INCLUYE ESTADO)
-// ==========================================
 app.get('/api/reporte/descargar-stock', verificarToken, async (req, res) => {
     const { producto, categoria, almacen, estado } = req.query;
     try {
@@ -702,9 +736,6 @@ app.get('/api/reporte/descargar-stock', verificarToken, async (req, res) => {
     } catch (error) { console.error("Error al generar Excel de stock:", error); res.status(500).json({ error: 'Error al generar Excel' }); }
 });
 
-// ==========================================
-// CARGA MASIVA EXCEL (CON SOPORTE DE ESTADO Y FECHAS)
-// ==========================================
 app.post('/api/cargar-masiva/:tipo', verificarToken, verificarRol(['Master', 'Administrador']), upload.single('file'), async (req, res) => {
     const { tipo } = req.params; 
     const workbook = xlsx.readFile(req.file.path); 
@@ -737,9 +768,6 @@ app.post('/api/cargar-masiva/:tipo', verificarToken, verificarRol(['Master', 'Ad
     } catch (e) { await client.query('ROLLBACK'); res.status(500).json({ error: e.message }); } finally { client.release(); }
 });
 
-// ==========================================
-// LOGS DE AUDITORÍA DEL SISTEMA
-// ==========================================
 app.get('/api/reporte/logs', verificarToken, verificarRol(['Master', 'Administrador']), async (req, res) => {
     try {
         const query = `SELECT l.id, l.accion, l.tabla_afectada, l.registro_id, l.detalles, l.fecha, 

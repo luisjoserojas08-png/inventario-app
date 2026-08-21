@@ -18,28 +18,51 @@
     function parseJwt(t) { try { return JSON.parse(atob(t.split('.')[1])); } catch (e) { return null; } }
     const currentUser = parseJwt(token);
     
-    // Variables globales de permisos
-    const isRestricted = currentUser && (currentUser.rol === 'Operario' || currentUser.rol === 'Consulta');
-    const isMaster = currentUser && currentUser.rol === 'Master';
+    // ==========================================
+    // BLOQUE DE SEGURIDAD UNIVERSAL Y ROLES
+    // ==========================================
+    if (currentUser) {
+        const rol = currentUser.rol;
+        
+        // 1. Reglas básicas por clases HTML
+        if (rol !== 'Master') {
+            document.querySelectorAll('.master-only').forEach(el => el.style.display = 'none');
+        }
+        if (rol === 'Operario' || rol === 'Consulta') {
+            document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+        }
 
-    // Ocultar elementos visuales según el rol al cargar la página
+        // 2. Blindaje Estricto del Menú Lateral (Sidebar)
+        document.addEventListener("DOMContentLoaded", () => {
+            document.querySelectorAll('aside nav a').forEach(link => {
+                const href = link.getAttribute('href');
+                
+                if (href === 'usuarios.html' && rol !== 'Master') {
+                    link.style.display = 'none';
+                }
+                
+                if (rol === 'Consulta') {
+                    const permitidos = ['index.html', 'reportes.html', 'productos.html'];
+                    if (!permitidos.includes(href)) {
+                        link.style.display = 'none';
+                    }
+                }
+            });
+        });
+    }
+
+    // Reglas Específicas de la pantalla Maestro de Productos
+    const isRestricted = currentUser && (currentUser.rol === 'Operario' || currentUser.rol === 'Consulta');
+
     document.addEventListener("DOMContentLoaded", () => {
         if (isRestricted) {
-            // Ocultamos el panel de crear producto (el flex-1 de la tabla hará que ocupe todo el ancho)
+            // Ocultamos el panel de crear producto
             const panelCrear = document.getElementById('panel-crear-producto');
             if(panelCrear) panelCrear.classList.add('hidden');
             
             // Ocultamos la cabecera de la columna de acciones en la tabla
             const colAcciones = document.getElementById('col-acciones');
             if(colAcciones) colAcciones.classList.add('hidden');
-
-            // Ocultamos opciones del menú exclusivas de Admin/Master
-            document.querySelectorAll('.admin-only').forEach(el => el.classList.add('hidden'));
-        }
-
-        // Ocultamos opciones exclusivas del Master (como Gestión de Usuarios)
-        if (!isMaster) {
-            document.querySelectorAll('.master-only').forEach(el => el.classList.add('hidden'));
         }
     });
   </script>
@@ -148,7 +171,6 @@
             const tbody = document.getElementById('tabla-productos');
             
             if (!productos.length) {
-                // Ajustamos el colspan dinámicamente si las acciones están ocultas
                 tbody.innerHTML = `<tr><td colspan="${isRestricted ? '4' : '5'}" class="px-6 py-6 text-center text-slate-400">No hay productos registrados.</td></tr>`;
                 return;
             }
@@ -161,6 +183,7 @@
                     <td class="px-6 py-4 font-semibold text-right ${p.stock_actual > 0 ? 'text-emerald-600' : 'text-red-500'}">${Number(p.stock_actual).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} <span class="text-xs font-normal">${p.unidad_medida}</span></td>
                     <td class="px-6 py-4 text-right ${isRestricted ? 'hidden' : ''}">
                         <button onclick="prepararEdicion(${p.id}, '${p.sku}', '${p.nombre.replace(/'/g, "\\'")}', '${p.unidad_medida}', ${p.categoria_id})" class="text-amber-600 hover:text-amber-800 font-medium text-sm bg-amber-50 px-3 py-1 rounded-md">✏️ Editar</button>
+                        <button onclick="eliminarProducto(${p.id}, '${p.nombre.replace(/'/g, "\\'")}')" class="text-red-600 hover:text-red-800 font-medium text-sm bg-red-50 px-3 py-1 rounded-md ml-2">🗑️ Eliminar</button>
                     </td>
                 </tr>
             `).join('');
@@ -192,7 +215,6 @@
         document.getElementById('btn-cancelar').classList.add('hidden');
     };
 
-    // Solo asociamos el evento submit si el formulario no está oculto (por seguridad adicional frontend)
     if (!isRestricted) {
         document.getElementById('form-producto').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -225,6 +247,7 @@
 
     cargarCategorias();
     cargarProductos();
+
     // ==========================================
     // ELIMINAR PRODUCTO (CON VALIDACIÓN DE AUDITORÍA)
     // ==========================================
@@ -240,14 +263,12 @@
             const data = await res.json();
             
             if (!res.ok) {
-                // Muestra la advertencia contable del backend
                 alert(data.error);
                 return;
             }
             
-            // Si todo sale bien
             alert("✅ " + data.mensaje);
-            cargarProductos(); // Recarga la tabla automáticamente
+            cargarProductos(); 
             
         } catch (error) {
             console.error(error);

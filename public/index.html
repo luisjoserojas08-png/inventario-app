@@ -205,10 +205,15 @@
                 ? `<span class="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1 w-max mt-1 uppercase tracking-wide">🚚 Tránsito</span>`
                 : `<span class="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1 w-max mt-1 uppercase tracking-wide"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Disponible</span>`;
 
-            // Botón de Recibir (Solo si es tránsito y tiene permiso)
-            const btnRecibir = (lote.estado === 'TRANSITO' && currentUser.rol !== 'Consulta') 
-                ? `<button onclick="abrirModalRecibir(${lote.lote_id}, ${lote.stock_restante})" class="text-[11px] bg-corporate-primary text-white px-3 py-1.5 rounded hover:bg-blue-800 transition w-full font-bold shadow-sm whitespace-nowrap">📦 Recibir</button>` 
-                : `<span class="text-xs text-slate-300 italic block text-center">-</span>`;
+            // Botón de Acción (Recibir o Anular)
+            let btnAccion = `<span class="text-xs text-slate-300 italic block text-center">-</span>`;
+            
+            if (lote.estado === 'TRANSITO' && currentUser.rol !== 'Consulta') {
+                btnAccion = `<button onclick="abrirModalRecibir(${lote.lote_id}, ${lote.stock_restante})" class="text-[11px] bg-corporate-primary text-white px-3 py-1.5 rounded hover:bg-blue-800 transition w-full font-bold shadow-sm whitespace-nowrap">📦 Recibir</button>`;
+            } 
+            else if (lote.estado === 'DISPONIBLE' && lote.lote_origen_id && ['Master', 'Administrador'].includes(currentUser.rol)) {
+                btnAccion = `<button onclick="anularRecepcion(${lote.lote_id})" class="text-[11px] bg-red-500 text-white px-3 py-1.5 rounded hover:bg-red-700 transition w-full font-bold shadow-sm whitespace-nowrap">↩️ Anular</button>`;
+            }
 
             html += `<tr class="hover:bg-slate-50 transition border-b border-slate-100">
                 <td class="px-6 py-4">
@@ -224,7 +229,7 @@
                 </td>
                 ${puedeVerCostos ? `<td class="px-6 py-4 text-right text-slate-500 text-xs">$${costoUnitario.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                 <td class="px-6 py-4 text-right font-bold text-emerald-700">$${costoTotalLote.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>` : ''}
-                <td class="px-6 py-4 align-middle">${btnRecibir}</td>
+                <td class="px-6 py-4 align-middle">${btnAccion}</td>
             </tr>`;
         });
 
@@ -275,6 +280,29 @@
             cargarInventario(); 
         } catch(e) {
             alert("❌ Error contactando al servidor.");
+        }
+    }
+
+    // LÓGICA DE ANULACIÓN
+    async function anularRecepcion(id) {
+        if(!confirm("¿Estás seguro de anular esta recepción?\n\nLa cantidad se restará de la planta y volverá a estar 'En Tránsito' en su camión original.")) return;
+        
+        try {
+            const res = await fetch(`/api/entradas/anular-recepcion/${id}`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            
+            if(!res.ok) {
+                alert(`⚠️ NO SE PUEDE ANULAR:\n\n${data.error}`);
+                return;
+            }
+            
+            alert("✅ " + data.mensaje);
+            cargarInventario(); 
+        } catch(e) {
+            alert("❌ Error de red al intentar anular.");
         }
     }
 

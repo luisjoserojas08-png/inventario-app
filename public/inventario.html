@@ -27,6 +27,51 @@
     </div>
 
     <script>
+        // ==========================================
+    // BLOQUE DE SEGURIDAD UNIVERSAL Y ROLES
+    // ==========================================
+    if (currentUser) {
+        const rol = currentUser.rol;
+        
+        // 1. Reglas básicas por clases HTML
+        if (rol !== 'Master') {
+            document.querySelectorAll('.master-only').forEach(el => el.style.display = 'none');
+        }
+        if (rol === 'Operario' || rol === 'Consulta') {
+            document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+        }
+
+        // 2. Blindaje Estricto del Menú Lateral (Sidebar)
+        document.querySelectorAll('aside nav a').forEach(link => {
+            const href = link.getAttribute('href');
+            
+            // Nadie excepto Master puede ver Gestión de Usuarios
+            if (href === 'usuarios.html' && rol !== 'Master') {
+                link.style.display = 'none';
+            }
+            
+            // Regla EXCLUSIVA para el rol Consulta: Solo ve 3 pantallas
+            if (rol === 'Consulta') {
+                const permitidos = ['index.html', 'reportes.html', 'productos.html'];
+                if (!permitidos.includes(href)) {
+                    link.style.display = 'none';
+                }
+            }
+        });
+
+        // 3. Ocultar módulos de costos visuales (Si existen en la pantalla actual)
+        const puedeVerCostos = ['Master', 'Administrador', 'Consulta'].includes(rol);
+        if (!puedeVerCostos) {
+            const thCostoU = document.getElementById('th-costou');
+            const thCostoT = document.getElementById('th-costot');
+            const kpiValor = document.getElementById('kpi-valor');
+            
+            if (thCostoU) thCostoU.style.display = 'none';
+            if (thCostoT) thCostoT.style.display = 'none';
+            if (kpiValor) kpiValor.parentElement.parentElement.style.display = 'none';
+        }
+    }
+
         // SEGURIDAD
         const token = localStorage.getItem('erp_token');
         if (!token) window.location.href = 'login.html';

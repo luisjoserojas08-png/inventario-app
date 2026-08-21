@@ -848,14 +848,28 @@ app.post('/api/cargar-masiva/:tipo', verificarToken, verificarRol(['Master', 'Ad
                     const partes = String(row.FECHA).split('/');
                     if (partes.length === 3) fechaEntrada = `${partes[2]}-${partes[1].padStart(2, '0')}-${partes[0].padStart(2, '0')}T12:00:00-04:00`; 
                 }
-                const estado = row.ESTADO || 'DISPONIBLE';
+                
+                // 1. Normalizamos el estado por si viene en minúsculas o con espacios en el Excel
+                const estadoLote = row.ESTADO ? String(row.ESTADO).toUpperCase().trim() : 'DISPONIBLE';
+                
+                // 2. Insertamos la entrada con su estado correspondiente
                 await client.query('INSERT INTO entradas (producto_id, cantidad, costo_unitario, stock_restante, fecha, usuario_id, estado) VALUES ($1, $2, $3, $4, $5, $6, $7)', 
-                    [row.PRODUCTO_ID, row.CANTIDAD, row.COSTO, row.CANTIDAD, fechaEntrada, req.user.id, estado]);
-                await client.query('UPDATE productos SET stock_actual = stock_actual + $1 WHERE id = $2', [row.CANTIDAD, row.PRODUCTO_ID]);
+                    [row.PRODUCTO_ID, row.CANTIDAD, row.COSTO, row.CANTIDAD, fechaEntrada, req.user.id, estadoLote]);
+                
+                // 3. VALIDACIÓN ESTRICTA: Solo sumamos al stock si el estado es DISPONIBLE
+                if (estadoLote === 'DISPONIBLE') {
+                    await client.query('UPDATE productos SET stock_actual = stock_actual + $1 WHERE id = $2', [row.CANTIDAD, row.PRODUCTO_ID]);
+                }
             }
         }
-        await client.query('COMMIT'); res.json({ mensaje: `Carga masiva de ${tipo} completada` });
-    } catch (e) { await client.query('ROLLBACK'); res.status(500).json({ error: e.message }); } finally { client.release(); }
+        await client.query('COMMIT'); 
+        res.json({ mensaje: `Carga masiva de ${tipo} completada` });
+    } catch (e) { 
+        await client.query('ROLLBACK'); 
+        res.status(500).json({ error: e.message }); 
+    } finally { 
+        client.release(); 
+    }
 });
 
 app.get('/api/reporte/logs', verificarToken, verificarRol(['Master', 'Administrador']), async (req, res) => {

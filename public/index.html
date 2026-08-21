@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ERP - Dashboard Inventario</title>
+    <title>ERP - Dashboard de Inventario</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = { theme: { extend: { colors: { corporate: { dark: '#0f172a', primary: '#1e40af', light: '#f8fafc', border: '#e2e8f0' } } } } }
@@ -12,29 +12,20 @@
 <body class="bg-corporate-light font-sans text-slate-800 subpixel-antialiased">
 
   <script>
-    // 1. Validar sesión de inmediato
     const token = localStorage.getItem('erp_token') || localStorage.getItem('token');
     if (!token) window.location.href = 'login.html';
-    
-    // 2. Función segura para leer el token
-    function parseJwt(t) { 
-        if (!t) return null;
-        try { return JSON.parse(atob(t.split('.')[1])); } 
-        catch (e) { return null; } 
-    }
+    function parseJwt(t) { try { return JSON.parse(atob(t.split('.')[1])); } catch (e) { return null; } }
     const currentUser = parseJwt(token);
-    
-    // 3. Evaluamos el permiso basados puramente en el ROL del token
     const puedeVerCostos = currentUser && ['Master', 'Administrador', 'Consulta'].includes(currentUser.rol);
   </script>
 
   <div class="flex h-screen overflow-hidden">
     <!-- Sidebar -->
-    <aside class="w-64 bg-corporate-dark text-slate-300 flex flex-col hidden md:flex shrink-0">
+    <aside class="w-64 bg-corporate-dark text-slate-300 flex flex-col hidden md:flex">
       <div class="p-6 text-xl font-bold text-white tracking-wider border-b border-slate-800">ERP Genética</div>
       <nav class="flex-1 p-4 space-y-2 overflow-y-auto">
-        <a href="index.html" class="block px-4 py-2.5 rounded-lg bg-corporate-primary text-white font-medium shadow-xs">📊 Dashboard Inventario</a>
-        <a href="costeo.html" class="costos-only admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">💰 Costeo de Existencias</a>
+        <a href="index.html" class="block px-4 py-2.5 rounded-lg bg-corporate-primary text-white font-medium shadow-xs transition">📊 Dashboard Inventario</a>
+        <a href="costeo.html" class="admin-only block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">💰 Costeo de Existencias</a>
         <a href="productos.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📦 Maestro de Productos</a>
         <a href="entradas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📥 Registro de Compras</a>
         <a href="salidas.html" class="block px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-300 transition">📤 Registro de Salidas</a>
@@ -46,200 +37,262 @@
       </nav>
     </aside>
 
+    <!-- Main -->
     <div class="flex-1 flex flex-col overflow-y-auto">
-      <header class="bg-white border-b h-16 flex items-center justify-between px-8 shadow-xs shrink-0">
-        <h1 class="text-lg font-semibold text-slate-700">Dashboard General de Inventario</h1>
-        <div class="flex items-center gap-4">
-            <button onclick="descargarStockExcel()" class="bg-emerald-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-emerald-700 transition shadow-sm">
-                📥 Descargar Stock
-            </button>
-            <button onclick="localStorage.clear(); window.location.href='login.html'" class="text-sm text-red-600 font-medium bg-red-50 px-3 py-1.5 rounded-lg hover:bg-red-100 transition">Cerrar Sesión</button>
-        </div>
+      <header class="bg-white border-b h-16 flex items-center justify-between px-8 shadow-xs">
+        <h1 class="text-lg font-semibold text-slate-700">Visor de Existencias</h1>
+        <button onclick="localStorage.clear(); window.location.href='login.html'" class="text-sm text-red-600 font-medium bg-red-50 px-3 py-1.5 rounded-lg hover:bg-red-100 transition">Cerrar Sesión</button>
       </header>
 
       <main class="p-8">
+        
         <!-- Tarjetas de Resumen -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <div class="bg-white p-6 rounded-2xl border border-corporate-border shadow-xs">
-            <p class="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">Lotes Activos (Con Stock)</p>
-            <h2 id="total-lotes" class="text-4xl font-extrabold text-slate-800">0</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+          <div class="bg-white rounded-xl p-6 border border-corporate-border shadow-xs flex items-center justify-between">
+            <div><p class="text-sm font-semibold text-slate-500 uppercase">Valor Total Inventario</p><p id="kpi-valor" class="text-2xl font-bold text-slate-800 mt-1">Cargando...</p></div>
+            <div class="h-12 w-12 rounded-full bg-blue-50 flex items-center justify-center text-xl">💰</div>
           </div>
-          <div class="costos-only bg-white p-6 rounded-2xl border border-corporate-border shadow-xs">
-            <p class="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">Valorización Total (Filtro Actual)</p>
-            <h2 id="total-valor" class="text-4xl font-extrabold text-emerald-600">$0.00</h2>
-          </div>
-        </div>
-
-        <!-- Filtros -->
-        <div class="bg-white p-6 rounded-2xl border border-corporate-border shadow-xs mb-8">
-          <h3 class="font-bold text-slate-700 border-b pb-3 mb-4">Filtros de Análisis Cruzado</h3>
-          <div class="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
-            <div>
-              <label class="block text-xs font-semibold text-slate-500 mb-1">Filtro Almacén</label>
-              <select id="filtro-almacen" class="w-full border rounded-lg px-4 py-2 text-sm bg-slate-50 outline-none"><option value="">Todos los Almacenes</option></select>
-            </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-500 mb-1">Filtro Categoría</label>
-              <select id="filtro-categoria" class="w-full border rounded-lg px-4 py-2 text-sm bg-slate-50 outline-none"><option value="">Todas las Categorías</option></select>
-            </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-500 mb-1">Filtro Producto</label>
-              <select id="filtro-producto" class="w-full border rounded-lg px-4 py-2 text-sm bg-slate-50 outline-none"><option value="">Todos los Productos</option></select>
-            </div>
-            <div>
-              <button onclick="cargarDashboard()" class="w-full bg-corporate-primary text-white px-4 py-2.5 rounded-lg text-sm hover:bg-blue-800 font-semibold transition shadow-xs">🔍 Aplicar Filtros</button>
-            </div>
+          <div class="bg-white rounded-xl p-6 border border-corporate-border shadow-xs flex items-center justify-between">
+            <div><p class="text-sm font-semibold text-slate-500 uppercase">Items con Stock</p><p id="kpi-items" class="text-2xl font-bold text-slate-800 mt-1">...</p></div>
+            <div class="h-12 w-12 rounded-full bg-emerald-50 flex items-center justify-center text-xl">📦</div>
           </div>
         </div>
 
-        <!-- Tabla FIFO -->
-        <div class="bg-white rounded-2xl border border-corporate-border shadow-xs overflow-hidden">
-          <div class="px-6 py-5 border-b bg-slate-50"><h3 class="font-bold text-slate-700">Existencias Actuales (Método FIFO)</h3></div>
-          <div class="overflow-x-auto max-h-[50vh]">
-            <table class="w-full text-left">
+        <!-- Panel de Filtros -->
+        <div class="bg-white rounded-xl border border-corporate-border p-5 mb-6 shadow-xs">
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Almacén</label>
+              <select id="filtro-almacen" class="w-full border-slate-300 rounded-lg text-sm px-3 py-2 outline-none focus:ring-2 focus:ring-corporate-primary"></select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Categoría</label>
+              <select id="filtro-categoria" class="w-full border-slate-300 rounded-lg text-sm px-3 py-2 outline-none focus:ring-2 focus:ring-corporate-primary"></select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Producto Específico</label>
+              <select id="filtro-producto" class="w-full border-slate-300 rounded-lg text-sm px-3 py-2 outline-none focus:ring-2 focus:ring-corporate-primary"></select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Estado del Lote</label>
+              <select id="filtro-estado" class="w-full border-slate-300 rounded-lg text-sm px-3 py-2 bg-slate-50 outline-none focus:ring-2 focus:ring-corporate-primary">
+                <option value="">Todos (Físico + Tránsito)</option>
+                <option value="DISPONIBLE">🟢 Solo Disponibles en Planta</option>
+                <option value="TRANSITO">🚚 Solo en Tránsito</option>
+              </select>
+            </div>
+          </div>
+          <div class="flex justify-end mt-4 gap-3">
+            <button onclick="descargarStockExcel()" class="px-5 py-2 rounded-lg font-medium text-sm border text-corporate-primary hover:bg-slate-50 transition">📥 Exportar a Excel</button>
+            <button onclick="cargarInventario()" class="px-5 py-2 rounded-lg font-medium text-sm bg-corporate-primary text-white hover:bg-blue-800 transition shadow-sm">Aplicar Filtros</button>
+          </div>
+        </div>
+
+        <!-- Tabla -->
+        <div class="bg-white rounded-xl border border-corporate-border shadow-xs overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
               <thead>
-                <tr id="tabla-head" class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b sticky top-0">
-                  <th class="px-6 py-3">Lote ID</th>
-                  <th class="px-6 py-3">Producto / SKU</th>
-                  <th class="px-6 py-3">Categoría</th>
-                  <th class="px-6 py-3">Almacén</th>
-                  <th class="px-6 py-3 text-right">Stock Disponible</th>
+                <tr class="bg-slate-50 text-slate-500 text-xs uppercase border-b">
+                  <th class="px-6 py-3 font-semibold">Lote ID</th>
+                  <th class="px-6 py-3 font-semibold">Producto / SKU</th>
+                  <th class="px-6 py-3 font-semibold">Categoría</th>
+                  <th class="px-6 py-3 font-semibold">Almacén</th>
+                  <th class="px-6 py-3 font-semibold text-right">Stock</th>
+                  <th class="px-6 py-3 font-semibold text-right" id="th-costou">Costo U.</th>
+                  <th class="px-6 py-3 font-semibold text-right" id="th-costot">Total ($)</th>
+                  <th class="px-6 py-3 font-semibold text-center">Acción</th>
                 </tr>
               </thead>
-              <tbody id="tabla-dashboard" class="divide-y text-sm text-slate-600">
-                <tr><td colspan="5" class="px-6 py-8 text-center text-slate-400">Cargando inventario...</td></tr>
-              </tbody>
+              <tbody id="tabla-body" class="divide-y text-sm text-slate-600"></tbody>
             </table>
           </div>
         </div>
+
       </main>
     </div>
   </div>
 
+  <!-- MODAL RECIBIR TRÁNSITO -->
+  <div id="modal-recibir" class="hidden absolute inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+    <div class="bg-white rounded-xl p-6 w-96 shadow-lg relative">
+      <h3 class="font-bold text-lg mb-2 text-slate-800">📦 Recibir Mercancía</h3>
+      <p class="text-xs text-slate-500 mb-4 border-b pb-4">Registra el ingreso a planta del lote en tránsito.</p>
+      
+      <input type="hidden" id="recibir-id">
+      
+      <label class="block text-sm font-medium text-slate-700 mb-1">Cantidad a Recibir (kg/uds)</label>
+      <input type="number" id="recibir-cant" step="0.01" class="w-full border rounded-lg px-3 py-2 mb-3 outline-none focus:ring-2 focus:ring-corporate-primary font-bold text-slate-700">
+      
+      <label class="block text-sm font-medium text-slate-700 mb-1">Nro. de Documento (Guía/Nota)</label>
+      <input type="text" id="recibir-doc" class="w-full border rounded-lg px-3 py-2 mb-3 outline-none focus:ring-2 focus:ring-corporate-primary uppercase" placeholder="Ej: NE-0042">
+      
+      <label class="block text-sm font-medium text-slate-700 mb-1">Fecha de Recepción Física</label>
+      <input type="datetime-local" id="recibir-fecha" class="w-full border rounded-lg px-3 py-2 mb-5 outline-none focus:ring-2 focus:ring-corporate-primary">
+      
+      <div class="flex justify-end gap-3 mt-2">
+        <button onclick="document.getElementById('modal-recibir').classList.add('hidden')" class="px-4 py-2 font-medium bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200">Cancelar</button>
+        <button onclick="procesarRecepcion()" class="px-4 py-2 font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 shadow-sm">Confirmar Ingreso</button>
+      </div>
+    </div>
+  </div>
+
   <script>
-    // Todo envuelto de forma segura para que no se ejecute antes de tiempo
-    document.addEventListener("DOMContentLoaded", () => {
-        // 1. Ocultar menús y tarjetas según permisos
-        if (!puedeVerCostos) {
-            document.querySelectorAll('.costos-only').forEach(el => el.classList.add('hidden'));
-        }
-        if (currentUser && currentUser.rol !== 'Master') {
-            document.querySelectorAll('.master-only').forEach(el => el.classList.add('hidden'));
-        }
-        if (currentUser && (currentUser.rol === 'Operario' || currentUser.rol === 'Consulta')) {
-            document.querySelectorAll('.admin-only').forEach(el => el.classList.add('hidden'));
-        }
-
-        // 2. Inyectar columnas de costos solo si tiene permiso (Master, Admin, Consulta)
-        if (puedeVerCostos) {
-            const tablaHead = document.getElementById('tabla-head');
-            if(tablaHead) {
-                tablaHead.innerHTML += `<th class="px-6 py-3 text-right">Costo Unit.</th><th class="px-6 py-3 text-right">Valor Total ($)</th>`;
-            }
-        }
-
-        // 3. Ejecutar las consultas al servidor AHORA que es seguro
-        cargarFiltros();
-        cargarDashboard();
-    });
+    if (currentUser) {
+      if (currentUser.rol !== 'Master') document.querySelectorAll('.master-only').forEach(el => el.style.display = 'none');
+      if (currentUser.rol === 'Operario' || currentUser.rol === 'Consulta') document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+      
+      if (!puedeVerCostos) {
+        document.getElementById('th-costou').style.display = 'none';
+        document.getElementById('th-costot').style.display = 'none';
+        document.getElementById('kpi-valor').parentElement.parentElement.style.display = 'none';
+      }
+    }
 
     async function cargarFiltros() {
-        const headers = { headers: { 'Authorization': `Bearer ${token}` } };
-        try {
-            const [alm, cat, prod] = await Promise.all([
-                fetch('/api/almacenes', headers).then(r=>r.json()),
-                fetch('/api/categorias', headers).then(r=>r.json()),
-                fetch('/api/productos', headers).then(r=>r.json())
-            ]);
-            document.getElementById('filtro-almacen').innerHTML += alm.map(a => `<option value="${a.nombre}">${a.nombre}</option>`).join('');
-            document.getElementById('filtro-categoria').innerHTML += cat.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
-            document.getElementById('filtro-producto').innerHTML += prod.map(p => `<option value="${p.id}">${p.nombre} (SKU: ${p.sku})</option>`).join('');
-        } catch (e) { console.error("Error cargando filtros", e); }
+      try {
+        const [resCat, resProd, resAlm] = await Promise.all([
+          fetch('/api/categorias', { headers: { 'Authorization': `Bearer ${token}` } }),
+          fetch('/api/productos', { headers: { 'Authorization': `Bearer ${token}` } }),
+          fetch('/api/almacenes', { headers: { 'Authorization': `Bearer ${token}` } })
+        ]);
+        const categorias = await resCat.json();
+        const productos = await resProd.json();
+        const almacenes = await resAlm.json();
+
+        document.getElementById('filtro-almacen').innerHTML = '<option value="">Todos los almacenes</option>' + (Array.isArray(almacenes) ? almacenes : []).map(a => `<option value="${a.nombre}">${a.nombre}</option>`).join('');
+        document.getElementById('filtro-categoria').innerHTML = '<option value="">Todas las categorías</option>' + (Array.isArray(categorias) ? categorias : []).map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
+        document.getElementById('filtro-producto').innerHTML = '<option value="">Todos los productos</option>' + (Array.isArray(productos) ? productos : []).map(p => `<option value="${p.id}">${p.nombre}</option>`).join('');
+      } catch (e) { console.error("Error al cargar filtros"); }
     }
 
-    async function cargarDashboard() {
-        const almacen = document.getElementById('filtro-almacen').value;
-        const categoria = document.getElementById('filtro-categoria').value;
-        const producto = document.getElementById('filtro-producto').value;
+    async function cargarInventario() {
+      const almacen = document.getElementById('filtro-almacen').value;
+      const categoria = document.getElementById('filtro-categoria').value;
+      const producto = document.getElementById('filtro-producto').value;
+      const estado = document.getElementById('filtro-estado').value;
+      
+      let url = '/api/inventario-lotes?v=1';
+      if (almacen) url += `&almacen=${encodeURIComponent(almacen)}`;
+      if (categoria) url += `&categoria=${categoria}`;
+      if (producto) url += `&producto=${producto}`;
+      if (estado) url += `&estado=${estado}`;
+
+      try {
+        const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+        const lotes = await res.json();
+        const tbody = document.getElementById('tabla-body');
         
-        let url = '/api/inventario-lotes?v=1';
-        if(almacen) url += `&almacen=${encodeURIComponent(almacen)}`;
-        if(categoria) url += `&categoria=${categoria}`;
-        if(producto) url += `&producto=${producto}`;
+        if (lotes.error) {
+            tbody.innerHTML = `<tr><td colspan="8" class="text-center py-6 text-red-500">Error al cargar datos.</td></tr>`;
+            return;
+        }
+
+        let totalUSD = 0;
+        let itemsUnicos = new Set();
+        let html = '';
+
+        (Array.isArray(lotes) ? lotes : []).forEach(lote => {
+            const stockRestante = parseFloat(lote.stock_restante);
+            const costoUnitario = parseFloat(lote.costo_unitario) || 0;
+            const costoTotalLote = stockRestante * costoUnitario;
+            
+            totalUSD += costoTotalLote;
+            itemsUnicos.add(lote.producto_id);
+
+            // Etiquetas (Badges) de estado
+            const badgeEstado = lote.estado === 'TRANSITO' 
+                ? `<span class="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1 w-max mt-1 uppercase tracking-wide">🚚 Tránsito</span>`
+                : `<span class="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1 w-max mt-1 uppercase tracking-wide"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Disponible</span>`;
+
+            // Botón de Recibir (Solo si es tránsito y tiene permiso)
+            const btnRecibir = (lote.estado === 'TRANSITO' && currentUser.rol !== 'Consulta') 
+                ? `<button onclick="abrirModalRecibir(${lote.lote_id}, ${lote.stock_restante})" class="text-[11px] bg-corporate-primary text-white px-3 py-1.5 rounded hover:bg-blue-800 transition w-full font-bold shadow-sm whitespace-nowrap">📦 Recibir</button>` 
+                : `<span class="text-xs text-slate-300 italic block text-center">-</span>`;
+
+            html += `<tr class="hover:bg-slate-50 transition border-b border-slate-100">
+                <td class="px-6 py-4">
+                  <span class="font-mono text-slate-700 text-xs font-semibold">LOT-${String(lote.lote_id).padStart(3, '0')}</span>
+                  ${badgeEstado}
+                </td>
+                <td class="px-6 py-4"><span class="font-bold text-slate-800">${lote.nombre}</span> <br><span class="text-xs text-slate-500">SKU: ${lote.sku}</span></td>
+                <td class="px-6 py-4 text-slate-600">${lote.categoria_nombre || 'N/A'}</td>
+                <td class="px-6 py-4 text-slate-600">${lote.almacen || 'Principal'}</td>
+                <td class="px-6 py-4 text-right font-extrabold text-corporate-primary">
+                  ${stockRestante.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} 
+                  <span class="font-normal text-xs text-slate-500">${lote.unidad_medida}</span>
+                </td>
+                ${puedeVerCostos ? `<td class="px-6 py-4 text-right text-slate-500 text-xs">$${costoUnitario.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                <td class="px-6 py-4 text-right font-bold text-emerald-700">$${costoTotalLote.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>` : ''}
+                <td class="px-6 py-4 align-middle">${btnRecibir}</td>
+            </tr>`;
+        });
+
+        tbody.innerHTML = html || `<tr><td colspan="8" class="text-center py-10 text-slate-500">No se encontraron lotes con estos filtros.</td></tr>`;
+
+        if (puedeVerCostos) document.getElementById('kpi-valor').innerText = `$${totalUSD.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        document.getElementById('kpi-items').innerText = itemsUnicos.size;
+
+      } catch (error) {
+        document.getElementById('tabla-body').innerHTML = `<tr><td colspan="8" class="text-center py-6 text-red-500 font-semibold">Error de conexión al cargar datos.</td></tr>`;
+      }
+    }
+
+    // LÓGICA DE RECEPCIÓN
+    function abrirModalRecibir(id, maxQty) {
+        document.getElementById('recibir-id').value = id;
+        document.getElementById('recibir-cant').value = maxQty; 
+        document.getElementById('recibir-doc').value = '';
+        
+        // Ponemos la hora actual (ajustada a local)
+        const ahora = new Date();
+        ahora.setMinutes(ahora.getMinutes() - ahora.getTimezoneOffset());
+        document.getElementById('recibir-fecha').value = ahora.toISOString().slice(0, 16);
+        
+        document.getElementById('modal-recibir').classList.remove('hidden');
+    }
+
+    async function procesarRecepcion() {
+        const id = document.getElementById('recibir-id').value;
+        const cantidad = document.getElementById('recibir-cant').value;
+        const documento = document.getElementById('recibir-doc').value;
+        const fecha = document.getElementById('recibir-fecha').value;
+
+        if(!cantidad || cantidad <= 0) return alert("Ingresa una cantidad válida.");
 
         try {
-            const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
-            if (!res.ok) throw new Error("Error en la conexión con el servidor");
+            const res = await fetch(`/api/entradas/recibir-transito/${id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ cantidad_recibida: cantidad, nro_documento: documento, fecha: fecha })
+            });
             
-            const lotes = await res.json();
+            const data = await res.json();
+            if(!res.ok) return alert(`⚠️ DENEGADO:\n${data.error}`);
             
-            // Protección contra errores en la respuesta de la Base de Datos
-            if (!Array.isArray(lotes)) {
-                throw new Error("Formato de datos incorrecto");
-            }
-            
-            let html = '';
-            let valTotal = 0;
-
-            if (lotes.length === 0) {
-                html = `<tr><td colspan="${puedeVerCostos ? 7 : 5}" class="px-6 py-8 text-center text-slate-500">No hay lotes con stock disponibles bajo estos filtros.</td></tr>`;
-            } else {
-                lotes.forEach(l => {
-                    const cant = parseFloat(l.stock_restante);
-                    
-                    html += `
-                        <tr class="hover:bg-slate-50 transition">
-                            <td class="px-6 py-4 font-mono font-bold text-blue-600">LOT-${String(l.lote_id).padStart(3, '0')}</td>
-                            <td class="px-6 py-4"><p class="font-bold text-slate-800">${l.nombre}</p><p class="text-xs text-slate-400">SKU: ${l.sku}</p></td>
-                            <td class="px-6 py-4 text-slate-500">${l.categoria_nombre || 'N/A'}</td>
-                            <td class="px-6 py-4"><span class="bg-slate-100 px-2 py-1 rounded text-xs border">${l.almacen || 'Principal'}</span></td>
-                            <td class="px-6 py-4 font-extrabold text-emerald-600 text-right">${cant.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} <span class="text-xs font-normal text-slate-400">${l.unidad_medida}</span></td>
-                    `;
-                    
-                    // Solo llenamos dinero si tiene permiso
-                    if (puedeVerCostos) {
-                        const costo = parseFloat(l.costo_unitario) || 0;
-                        const totalLinea = cant * costo;
-                        valTotal += totalLinea;
-                        
-                        html += `
-                            <td class="px-6 py-4 font-medium text-slate-600 text-right">$${costo.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                            <td class="px-6 py-4 font-bold text-slate-800 text-right">$${totalLinea.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                        `;
-                    }
-                    html += `</tr>`;
-                });
-            }
-
-            document.getElementById('tabla-dashboard').innerHTML = html;
-            document.getElementById('total-lotes').innerText = lotes.length;
-            
-            if (puedeVerCostos) {
-                document.getElementById('total-valor').innerText = `$${valTotal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-            }
-        } catch (e) {
-            console.error(e);
-            document.getElementById('tabla-dashboard').innerHTML = `<tr><td colspan="${puedeVerCostos ? 7 : 5}" class="px-6 py-8 text-center text-red-500">Error al cargar datos. Compruebe su conexión o recargue la página.</td></tr>`;
+            alert("✅ " + data.mensaje);
+            document.getElementById('modal-recibir').classList.add('hidden');
+            cargarInventario(); 
+        } catch(e) {
+            alert("❌ Error contactando al servidor.");
         }
     }
 
+    // EXCEL CON FETCH BLINDADO
     async function descargarStockExcel() {
         const almacen = document.getElementById('filtro-almacen').value;
         const categoria = document.getElementById('filtro-categoria').value;
         const producto = document.getElementById('filtro-producto').value;
+        const estado = document.getElementById('filtro-estado').value;
         
         let url = '/api/reporte/descargar-stock?v=1';
         if(almacen) url += `&almacen=${encodeURIComponent(almacen)}`;
         if(categoria) url += `&categoria=${categoria}`;
         if(producto) url += `&producto=${producto}`;
+        if(estado) url += `&estado=${estado}`; // Se incluye el filtro al exportar
         
         try {
-            // Enviamos la petición con el Token de forma segura
-            const res = await fetch(url, {
-                method: 'GET',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            
+            const res = await fetch(url, { method: 'GET', headers: { 'Authorization': `Bearer ${token}` } });
             if (!res.ok) throw new Error("No se pudo descargar el archivo");
             
             const blob = await res.blob();
@@ -248,17 +301,15 @@
             const a = document.createElement('a');
             a.style.display = 'none';
             a.href = downloadUrl;
-            a.download = "Stock_Inventario_Actual.xlsx";
+            a.download = "Stock_Inventario.xlsx";
             document.body.appendChild(a);
             a.click();
-            
             window.URL.revokeObjectURL(downloadUrl);
             a.remove();
-        } catch (e) {
-            console.error(e);
-            alert("Error al intentar descargar el stock. Verifica tu conexión y permisos.");
-        }
+        } catch (e) { alert("Error al intentar descargar el Excel."); }
     }
+
+    cargarFiltros().then(cargarInventario);
   </script>
 </body>
 </html>

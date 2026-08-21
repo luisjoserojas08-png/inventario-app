@@ -159,11 +159,40 @@ app.put('/api/almacenes/:id', verificarToken, verificarRol(['Master', 'Administr
         res.json({ mensaje: 'Almacén actualizado' });
     } catch (error) { res.status(500).json({ error: 'Error al actualizar almacén' }); }
 });
-app.delete('/api/almacenes/:id', verificarToken, verificarRol(['Master', 'Administrador']), async (req, res) => {
+
+// ELIMINAR ALMACÉN CON VALIDACIÓN ESTRICTA DE PRODUCTOS
+app.delete('/api/almacenes/:id', verificarToken, async (req, res) => {
+    const { id } = req.params;
+    
     try {
-        await pool.query('DELETE FROM almacenes WHERE id = $1', [req.params.id]);
-        res.json({ mensaje: 'Almacén eliminado' });
-    } catch (error) { res.status(400).json({ error: 'No se puede eliminar. Verifica que no tenga categorías asignadas.' }); }
+        // Obtener el almacén para saber su nombre
+        const almRes = await pool.query('SELECT * FROM almacenes WHERE id = $1', [id]);
+        if (almRes.rows.length === 0) {
+            return res.status(404).json({ error: 'Almacén no encontrado.' });
+        }
+        const nombreAlmacen = almRes.rows[0].nombre;
+
+        // VALIDACIÓN CRÍTICA: ¿Hay productos en este almacén a través de sus categorías?
+        const productosEnUso = await pool.query(
+            `SELECT COUNT(*) FROM productos p 
+             JOIN categorias c ON p.categoria_id = c.id 
+             WHERE c.almacen = $1`, 
+            [nombreAlmacen]
+        );
+
+        if (parseInt(productosEnUso.rows[0].count) > 0) {
+            return res.status(400).json({ 
+                error: '⚠️ DENEGADO: Este almacén contiene productos asociados. Debe reubicarlos o eliminarlos primero.' 
+            });
+        }
+
+        // Si pasa la validación, procedemos a borrar
+        await pool.query('DELETE FROM almacenes WHERE id = $1', [id]);
+        res.json({ mensaje: 'Almacén eliminado correctamente.' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al intentar eliminar el almacén.' });
+    }
 });
 
 app.post('/api/categorias', verificarToken, verificarRol(['Master', 'Administrador']), async (req, res) => {
@@ -230,6 +259,45 @@ app.put('/api/productos/:id', verificarToken, verificarRol(['Master', 'Administr
             [req.body.sku, req.body.nombre, req.body.categoria_id, req.body.unidad_medida, req.params.id]);
         res.json({ mensaje: 'Producto actualizado correctamente' });
     } catch (error) { res.status(500).json({ error: 'Error al actualizar producto' }); }
+});
+
+app.delete('/api/productos/:id', verificarToken, verificarRol(['Master', 'Administrador']), async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        // 1. Verificar si el producto existe
+        const prodCheck = await pool.query('SELECT * FROM productos WHERE id = $1', [id]);
+        if (prodCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Producto no encontrado.' });
+        }
+        
+        const producto = prodCheck.rows[0];
+
+        // 2. REGLA DE CONTABILIDAD: No se puede borrar si tiene stock físico
+        if (parseFloat(producto.stock_actual) > 0) {
+            return res.status(400).json({ 
+                error: `⚠️ No se puede eliminar "${producto.nombre}" porque tiene stock activo (${producto.stock_actual} ${producto.unidad_medida}). Debe agotarlo o dejarlo en cero primero.` 
+            });
+        }
+
+        // 3. REGLA DE AUDITORÍA: Verificar si tiene historial de entradas o salidas
+        const historialEntradas = await pool.query('SELECT COUNT(*) FROM entradas WHERE producto_id = $1', [id]);
+        const historialSalidas = await pool.query('SELECT COUNT(*) FROM salidas WHERE producto_id = $1', [id]);
+
+        if (parseInt(historialEntradas.rows[0].count) > 0 || parseInt(historialSalidas.rows[0].count) > 0) {
+            return res.status(400).json({ 
+                error: `⚠️ ACCIÓN DENEGADA: "${producto.nombre}" posee registros históricos en el libro de compras o salidas. Por normativas de auditoría, los productos con transacciones pasadas no deben borrarse.` 
+            });
+        }
+
+        // 4. Si está limpio, se permite la eliminación
+        await pool.query('DELETE FROM productos WHERE id = $1', [id]);
+        res.json({ mensaje: 'Producto eliminado correctamente del maestro.' });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al intentar eliminar el producto.' });
+    }
 });
 
 app.get('/api/productos', verificarToken, async (req, res) => {
